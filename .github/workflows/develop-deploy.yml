@@ -29,3 +29,19 @@ jobs:
           tags: |
             ${{ secrets.DOCKER_USERNAME }}/hsumchaint-node:dev
             ${{ secrets.DOCKER_USERNAME }}/hsumchaint-node:dev-${{ github.sha }}
+    outputs:
+      status: ${{ job.status }}
+
+  notify:
+    needs: build-dev
+    if: always()
+    uses: ./.github/workflows/reusable-telegram.yml
+    with:
+      message: |
+        <b>🚀 Build Notification</b>
+        <b>Project:</b> Hsumchaint Node
+        <b>Branch:</b> ${{ github.ref_name }}
+        <b>Status:</b> ${{ needs.build-dev.result == 'success' && '✅ Success' || '❌ Failed' }}
+        <b>Commit:</b> <a href="${{ github.event.head_commit.url }}">${{ github.sha }}</a>
+        <b>By:</b> ${{ github.actor }}
+    secrets: inherit
