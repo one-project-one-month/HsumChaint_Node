@@ -28,7 +28,6 @@ jobs:
           cache-to: type=gha,mode=max
           tags: |
             ${{ secrets.DOCKER_USERNAME }}/hsumchaint-node:dev
-            ${{ secrets.DOCKER_USERNAME }}/hsumchaint-node:dev-${{ github.sha }}
     outputs:
       status: ${{ job.status }}
 
@@ -45,8 +44,8 @@ jobs:
           message_thread_id: ${{ secrets.TELEGRAM_GITHUB_TOPIC_ID }}
           format: HTML
           message: |
-            🚀 <b>Build Notification</b>
-            <b>Project:</b> Hsumchaint Node
+            <b>🚀 Docker Build Notification</b>
+            <b>Project:</b> NodeJS
             <b>Branch:</b> ${{ github.ref_name }}
             <b>Status:</b> ${{ needs.build-dev.result == 'success' && '✅ Success' || '❌ Failed' }}
             <b>Commit:</b> <a href="${{ github.event.head_commit.url }}">${{ github.sha }}</a>
