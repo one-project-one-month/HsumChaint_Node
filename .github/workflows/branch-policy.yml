@@ -1,0 +1,57 @@
+name: Branch Policy
+
+on:
+  pull_request_target:
+    types: [opened, reopened, synchronize]
+    branches: [main, staging, develop]
+
+jobs:
+  check-pr-target:
+    runs-on: ubuntu-slim
+    steps:
+      - name: Check PR target branch
+        shell: bash
+        run: |
+          base="${{ github.base_ref }}"
+          head="${{ github.head_ref }}"
+          is_fork="${{ github.event.pull_request.head.repo.fork }}"
+
+          echo "PR: $head → $base (Fork: $is_fork)"
+
+          # 1. Fork PR check
+          if [ "$is_fork" = "true" ] && [ "$base" != "develop" ]; then
+            echo "❌ Fork PRs must target 'develop' only!"
+            exit 1
+          fi
+
+          # 2. Internal Hotfix check
+          if [[ "$head" == hotfix/* ]] && [ "$base" != "main" ]; then
+            echo "❌ hotfix/* must target main"
+            exit 1
+          fi
+
+          # 3. internal develop flow
+          if [ "$head" = "develop" ] && [ "$base" != "staging" ]; then
+            echo "❌ develop must target staging"
+            exit 1
+          fi
+
+          # 4. internal staging flow
+          if [ "$head" = "staging" ] && [ "$base" != "main" ]; then
+            echo "❌ staging must target main"
+            exit 1
+          fi
+
+          echo "✅ PR target is valid!"
+
+  notify-failure:
+    needs: check-pr-target
+    if: failure()
+    uses: ./.github/workflows/reusable-telegram.yml
+    secrets: inherit
+    with:
+      message: |
+        <b>❌ Branch Policy Failed</b>
+        <b>Project:</b> NodeJS
+        <b>Actor:</b> ${{ github.actor }}
+        <b>Branch:</b> `${{ github.head_ref }}` → `${{ github.base_ref }}`

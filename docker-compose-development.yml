@@ -1,0 +1,106 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: docker/development.Dockerfile
+    container_name: hsumchaint_node
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    volumes:
+      - .:/app
+      - /app/node_modules
+    env_file:
+      - .env
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - app-network
+
+  mysql:
+    image: mysql:9.6
+    container_name: hsumchaint_db
+    restart: unless-stopped
+    env_file:
+      - .env
+    ports:
+      - "3306:3306"
+    volumes:
+      - hsumchaint_db:/var/lib/mysql
+    healthcheck:
+      test: [ "CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD:-rootpassword}" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - app-network
+
+  redis:
+    image: redis:8-alpine
+    container_name: redis_dev
+    restart: unless-stopped
+    env_file:
+      - .env
+    command: redis-server --requirepass ${REDIS_PASSWORD} --appendonly yes
+    ports:
+      - "6379:6379"
+    volumes:
+      - hsumchaint_redis:/data
+    healthcheck:
+      test: [ "CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-redispassword}", "ping" ]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks:
+      - app-network
+
+  # Dev GUI tools
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    container_name: redis_commander_dev
+    platform: linux/amd64
+    profiles: [ "dev" ]
+    environment:
+      - REDIS_HOSTS=local:redis:6379:0:${REDIS_PASSWORD:-redispassword}
+    ports:
+      - "8081:8081"
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - app-network
+
+  prisma-studio:
+    build:
+      context: .
+      dockerfile: docker/development.Dockerfile
+    container_name: prisma_studio
+    profiles: [ "dev" ]
+    env_file:
+      - .env
+    environment:
+      - PRISMA_STUDIO_HOSTNAME=0.0.0.0
+    volumes:
+      - .:/app
+      - /app/node_modules
+    working_dir: /app
+    command: [ "bunx", "prisma", "studio", "--port", "5555", "--browser", "none" ]
+    restart: unless-stopped
+    ports:
+      - "5555:5555"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge
+
+volumes:
+  hsumchaint_db:
+  hsumchaint_redis:

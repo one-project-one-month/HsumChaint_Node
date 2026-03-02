@@ -1,0 +1,44 @@
+name: PR Title Check
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+    branches: [main, staging, develop]
+
+jobs:
+  check-title:
+    runs-on: ubuntu-slim
+    steps:
+      - name: Validate PR title (Conventional Commits)
+        uses: amannn/action-semantic-pull-request@v5
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          types: |
+            feat
+            fix
+            docs
+            style
+            refactor
+            perf
+            test
+            chore
+            revert
+          subjectPattern: ^.{1,}$
+          headerPattern: '^(\w*)(?:\(([\w\$\.\-\* ]*)\))?\: (.*)$'
+
+  notify-failure:
+    needs: check-title
+    if: failure()
+    uses: ./.github/workflows/reusable-telegram.yml
+    secrets: inherit
+    with:
+      format: HTML
+      message: |
+        <b>❌ PR Title Check Failed</b>
+
+        <b>Project:</b> NodeJS
+        <b>Actor:</b> ${{ github.actor }}
+        <b>Title:</b> ${{ github.event.pull_request.title }}
+
+        <i>Please follow the Conventional Commits format (e.g., feat: add login).</i>

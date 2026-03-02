@@ -1,0 +1,6 @@
+node_modules/
+dist/
+prisma/migrations/
+bun.lock
+.env
+*.md

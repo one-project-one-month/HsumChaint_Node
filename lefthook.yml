@@ -1,0 +1,48 @@
+pre-commit:
+  parallel: true
+  commands:
+    eslint:
+      glob: 'src/**/*.{ts,tsx}'
+      run: bun run lint
+      stage_fixed: true
+    prettier:
+      glob: 'src/**/*.{ts,tsx,json,md}'
+      run: bun run format
+      stage_fixed: true
+
+commit-msg:
+  commands:
+    commitlint:
+      run: bunx commitlint --edit {1}
+
+pre-push:
+  commands:
+    branch-name:
+      run: |
+        branch=$(git rev-parse --abbrev-ref HEAD)
+
+        if echo "$branch" | grep -qE '^(main|staging|develop)$'; then
+          exit 0
+        fi
+
+        if ! echo "$branch" | grep -qE '^(feat|fix|chore|hotfix)/[a-z0-9-]+$'; then
+          echo "❌ Branch name '$branch' is invalid!"
+          echo ""
+          echo "✅ Allowed formats:"
+          echo "   feat/feature-name"
+          echo "   fix/bug-name"
+          echo "   chore/update-deps"
+          echo "   hotfix/bug-name"
+          echo "   develop, staging, main"
+          exit 1
+        fi
+    tests:
+      run: |
+        branch=$(git rev-parse --abbrev-ref HEAD)
+        if [ "$branch" = "main" ] || [ "$branch" = "staging" ]; then
+          echo "🚀 Running ALL tests (Unit + E2E) for $branch branch..."
+          bun run test:all
+        else
+          echo "🛡️ Running Unit tests for $branch branch..."
+          bun run test:unit
+        fi

@@ -1,0 +1,31 @@
+name: Reusable Telegram Notify
+
+on:
+  workflow_call:
+    inputs:
+      message:
+        required: true
+        type: string
+      format:
+        required: false
+        type: string
+        default: 'HTML'
+    secrets:
+      TELEGRAM_CHAT_ID:
+        required: true
+      TELEGRAM_BOT_TOKEN:
+        required: true
+      TELEGRAM_GITHUB_TOPIC_ID:
+        required: true
+
+jobs:
+  send:
+    runs-on: ubuntu-slim
+    steps:
+      - uses: Salmansha08/telegram-github-action@master
+        with:
+          to: ${{ secrets.TELEGRAM_CHAT_ID }}
+          token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          message_thread_id: ${{ secrets.TELEGRAM_GITHUB_TOPIC_ID }}
+          message: ${{ inputs.message }}
+          format: ${{ inputs.format }}
