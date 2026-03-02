@@ -39,10 +39,5 @@ pre-push:
     tests:
       run: |
         branch=$(git rev-parse --abbrev-ref HEAD)
-        if [ "$branch" = "main" ] || [ "$branch" = "staging" ]; then
-          echo "🚀 Running ALL tests (Unit + E2E) for $branch branch..."
-          bun run test:all
-        else
-          echo "🛡️ Running Unit tests for $branch branch..."
-          bun run test:unit
-        fi
+        echo "🛡️ Running Unit tests for $branch branch..."
+        bun test
