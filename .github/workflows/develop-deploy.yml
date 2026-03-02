@@ -24,6 +24,7 @@ jobs:
           context: .
           file: ./docker/development.Dockerfile
           push: true
+          platforms: linux/amd64,linux/arm64
           cache-from: type=gha
           cache-to: type=gha,mode=max
           tags: |
@@ -44,9 +45,8 @@ jobs:
           message_thread_id: ${{ secrets.TELEGRAM_GITHUB_TOPIC_ID }}
           format: HTML
           message: |
-            <b>🚀 Docker Build Notification</b>
+            <b>${{ needs.build-dev.result == 'success' && '✅' || '❌' }} Docker Build ${{ needs.build-dev.result == 'success' && 'Success' || 'Failed' }}</b>
             <b>Project:</b> NodeJS
             <b>Branch:</b> ${{ github.ref_name }}
-            <b>Status:</b> ${{ needs.build-dev.result == 'success' && '✅ Success' || '❌ Failed' }}
             <b>Commit:</b> <a href="${{ github.event.head_commit.url }}">${{ github.sha }}</a>
-            <b>By:</b> ${{ github.actor }}
+            <b>Actor:</b> ${{ github.actor }}
