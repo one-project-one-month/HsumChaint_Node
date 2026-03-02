@@ -35,13 +35,19 @@ jobs:
   notify:
     needs: build-dev
     if: always()
-    uses: ./.github/workflows/reusable-telegram.yml
-    with:
-      message: |
-        <b>🚀 Docker Dev Build Notification</b>
-        <b>Project:</b> NodeJS
-        <b>Branch:</b> ${{ github.ref_name }}
-        <b>Status:</b> ${{ needs.build-dev.result == 'success' && '✅ Success' || '❌ Failed' }}
-        <b>Commit:</b> <a href="${{ github.event.head_commit.url }}">${{ github.sha }}</a>
-        <b>By:</b> ${{ github.actor }}
-    secrets: inherit
+    runs-on: ubuntu-latest # Docker daemon ပါတဲ့ runner ဖြစ်ရပါမယ်
+    steps:
+      - name: send telegram message
+        uses: Salmansha08/telegram-github-action@master
+        with:
+          to: ${{ secrets.TELEGRAM_CHAT_ID }}
+          token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          message_thread_id: ${{ secrets.TELEGRAM_GITHUB_TOPIC_ID }}
+          format: HTML
+          message: |
+            🚀 <b>Build Notification</b>
+            <b>Project:</b> Hsumchaint Node
+            <b>Branch:</b> ${{ github.ref_name }}
+            <b>Status:</b> ${{ needs.build-dev.result == 'success' && '✅ Success' || '❌ Failed' }}
+            <b>Commit:</b> <a href="${{ github.event.head_commit.url }}">${{ github.sha }}</a>
+            <b>By:</b> ${{ github.actor }}
