@@ -12,19 +12,21 @@ generator client {
 datasource db {
   provider = "mysql"
 }
-
+enum UserType {
+  Monk
+  Donor
+}
 model User {
-  id    Int     @id @default(autoincrement())
-  email String  @unique
-  name  String?
-  posts Post[]
+  id        Int     @id @default(autoincrement())
+  phone     String  @unique
+  username  String
+  email     String?  @unique
+  password  String  
+  userType  UserType
+  fcmToken  String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  isDeleted Boolean  @default(false)
 }
 
-model Post {
-  id        Int     @id @default(autoincrement())
-  title     String
-  content   String? @db.Text
-  published Boolean @default(false)
-  author    User    @relation(fields: [authorId], references: [id])
-  authorId  Int
-}
+
