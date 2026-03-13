@@ -20,7 +20,7 @@ on:
 
 jobs:
   send:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-slim
     steps:
       - name: send message
         env:
