@@ -6,9 +6,11 @@ on:
 
 jobs:
   build-dev:
-    runs-on: ubuntu-slim
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -22,9 +24,31 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: .
+          file: ./docker/development.Dockerfile
           push: true
+          platforms: linux/amd64,linux/arm64
           cache-from: type=gha
           cache-to: type=gha,mode=max
           tags: |
             ${{ secrets.DOCKER_USERNAME }}/hsumchaint-node:dev
-            ${{ secrets.DOCKER_USERNAME }}/hsumchaint-node:dev-${{ github.sha }}
+    outputs:
+      status: ${{ job.status }}
+
+  notify:
+    needs: build-dev
+    if: always()
+    runs-on: ubuntu-latest # Docker daemon ပါတဲ့ runner ဖြစ်ရပါမယ်
+    steps:
+      - name: send telegram message
+        uses: Salmansha08/telegram-github-action@master
+        with:
+          to: ${{ secrets.TELEGRAM_CHAT_ID }}
+          token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          message_thread_id: ${{ secrets.TELEGRAM_GITHUB_TOPIC_ID }}
+          format: HTML
+          message: |
+            <b>${{ needs.build-dev.result == 'success' && '✅' || '❌' }} Docker Build ${{ needs.build-dev.result == 'success' && 'Success' || 'Failed' }}</b>
+            <b>Project:</b> NodeJS
+            <b>Branch:</b> ${{ github.ref_name }}
+            <b>Commit:</b> <a href="${{ github.event.head_commit.url }}">${{ github.sha }}</a>
+            <b>Actor:</b> ${{ github.actor }}

@@ -29,4 +29,6 @@ jobs:
         <b>Project:</b> Node
         <b>Actor:</b> ${{ github.actor }}
         <b>Title:</b> ${{ github.event.pull_request.title }}
+        <b>Commit:</b> <a href="${{ github.event.pull_request.head.sha }}">${{ github.event.pull_request.head.sha }}</a>
+        <br><br/>
         <b>Please follow the Conventional Commits format.</b>
