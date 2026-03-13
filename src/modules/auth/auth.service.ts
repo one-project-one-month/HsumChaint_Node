@@ -2,10 +2,13 @@ import { prisma } from '../../lib/prisma';
 import { RegisterInput } from './auth.schema';
 import { AppError } from '../../utils/AppError';
 export const registerUser = async (data: RegisterInput) => {
-  const email = data.email || undefined;
+  const conditions: any[] = [{ phone: data.phone }];
+  if (data.email) {
+    conditions.push({ email: data.email });
+  }
   const existingUser = await prisma.user.findFirst({
     where: {
-      OR: [{ phone: data.phone }, { email }],
+      OR: conditions,
       isDeleted: false,
     },
   });
@@ -16,7 +19,6 @@ export const registerUser = async (data: RegisterInput) => {
   const user = await prisma.user.create({
     data: {
       ...data,
-      email,
       password: hashedPassword,
     },
     select: {

@@ -1,11 +1,14 @@
 import { Request, Response, NextFunction } from 'express';
-import { registerSchema } from './auth.schema';
+import { RegisterInput } from './auth.schema';
 import { registerUser } from './auth.service';
 import { successResponse } from '@/utils/response';
-export const register = async (req: Request, res: Response, next: NextFunction) => {
+export const register = async (
+  req: Request<unknown, unknown, RegisterInput>,
+  res: Response,
+  next: NextFunction
+) => {
   try {
-    const data = registerSchema.parse(req.body);
-    const user = await registerUser(data);
+    const user = await registerUser(req.body);
     return successResponse(res, user, 'Register successful');
   } catch (error) {
     next(error);
