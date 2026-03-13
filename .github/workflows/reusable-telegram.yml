@@ -20,7 +20,7 @@ on:
 
 jobs:
   send:
-    runs-on: ubuntu-slim
+    runs-on: ubuntu-latest
     steps:
       - name: send message
         uses: Salmansha08/telegram-github-action@master
