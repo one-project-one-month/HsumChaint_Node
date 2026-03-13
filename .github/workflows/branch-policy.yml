@@ -55,3 +55,5 @@ jobs:
         <b>Project:</b> NodeJS
         <b>Actor:</b> ${{ github.actor }}
         <b>Branch:</b> `${{ github.head_ref }}` → `${{ github.base_ref }}`
+        <b>Commit:</b> <a href="${{ github.event.pull_request.head.sha }}">${{ github.event.pull_request.head.sha }}</a>
+        <br><br/>

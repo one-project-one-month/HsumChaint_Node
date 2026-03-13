@@ -22,10 +22,16 @@ jobs:
   send:
     runs-on: ubuntu-slim
     steps:
-      - uses: Salmansha08/telegram-github-action@master
-        with:
-          to: ${{ secrets.TELEGRAM_CHAT_ID }}
-          token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          message_thread_id: ${{ secrets.TELEGRAM_GITHUB_TOPIC_ID }}
-          message: ${{ inputs.message }}
-          format: ${{ inputs.format }}
+      - name: send message
+        env:
+          BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          THREAD_ID: ${{ secrets.TELEGRAM_GITHUB_TOPIC_ID }}
+          MESSAGE: ${{ inputs.message }}
+          FORMAT: ${{ inputs.format }}
+        run: |
+          curl -s -X POST "https://api.telegram.org/bot${BOT_TOKEN}/sendMessage" \
+            --data-urlencode "chat_id=${CHAT_ID}" \
+            --data-urlencode "message_thread_id=${THREAD_ID}" \
+            --data-urlencode "text=${MESSAGE}" \
+            --data-urlencode "parse_mode=${FORMAT}"
