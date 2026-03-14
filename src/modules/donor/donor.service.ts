@@ -66,7 +66,6 @@ export async function createDonorService(data: CreateDonorType) {
             email,
             phoneNo: phoneNo ?? '',
         },
-        include: donorInclude,
     });
 }
 

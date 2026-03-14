@@ -1,7 +1,6 @@
 import { z } from 'zod';
 import { PaginationQuerySchema } from '../../helper/paginationSchema';
 
-// GET /monasteries/:id/donors/:donorId
 const idParamSchema = z.object({
     params: z.object({
         id: z
@@ -20,9 +19,8 @@ const CreateDonorSchema = z.object({
             .string()
             .regex(/^\+?[1-9]\d{1,14}$/, 'Invalid phone number')
             .transform(val => val.replace(/[^\d+]/g, ''))
-            .refine((val) => val.length >= 6 && val.length <= 15, 'Phone number must be between 6 and 15 digits')
-            .optional(),
-    }).strict(),
+            .refine((val) => val.length >= 6 && val.length <= 15, 'Phone number must be between 6 and 15 digits'),
+    }),
 });
 
 const UpdateDonorSchema = z.object({

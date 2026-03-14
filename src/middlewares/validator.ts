@@ -14,11 +14,23 @@ export const validator =
       return next();
     } catch (error: unknown) {
       if (error instanceof ZodError) {
-        // custom error handling
+        const isMissingBody = error.issues.some(
+          (e) =>
+            e.path[0] === "body" &&
+            (e.code === "invalid_type" ||
+              e.message.toLowerCase().includes("required"))
+        );
+        if (isMissingBody) {
+          return res.status(500).json({
+            success: false,
+            message: "Internal Server Error",
+            error: "Request body is required",
+          });
+        }
         return res.status(400).json({
-          status: "failed",
+          success: false,
           message: "Validation Error",
-          detail: error.issues.map((e) => ({
+          error: error.issues.map((e) => ({
             path: e.path.join("."),
             message: e.message,
           })),
@@ -26,9 +38,9 @@ export const validator =
       }
 
       return res.status(500).json({
-        status: "error",
+        success: false,
         message: "Internal Server Error",
-        detail: null,
+        error: null,
       });
     }
   };

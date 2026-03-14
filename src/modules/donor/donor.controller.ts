@@ -22,6 +22,9 @@ const createDonor = async (
     next: NextFunction,
 ) => {
     try {
+        if (req.body == null || typeof req.body !== "object") {
+            return next(new Error("Request body is required"));
+        }
         const donor = await createDonorService({ body: req.body });
         return successResponse(res, donor, "Donor created successfully", 201);
     } catch (error) {
