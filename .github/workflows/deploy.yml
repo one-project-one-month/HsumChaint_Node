@@ -7,9 +7,6 @@ on:
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
     steps:
       - uses: actions/checkout@v4
       - name: Set up Docker Buildx
@@ -31,43 +28,37 @@ jobs:
   deploy:
     needs: build-and-push
     runs-on: ubuntu-latest
-    environment: ${{ github.ref_name == 'main' && 'production' || 'staging' }}
-    strategy:
-      max-parallel: 1
-      matrix:
-        server: ${{ github.ref_name == 'main' && fromJson('["IP_A", "IP_B"]') || fromJson('["STAGING_IP"]') }}
-
+    environment: ${{ github.ref_name == 'main' || 'staging' }}
     steps:
-      - name: Deploy via SSH
+      - name: Deploy to Vultr via SSH
         uses: appleboy/ssh-action@v1.0.3
         with:
-          host: ${{ matrix.server }}
-          username: ${{ secrets.SSH_USER }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          envs: MYSQL_ROOT_PASSWORD,REDIS_PASSWORD,DB_NAME,APP_PORT
+          host: ${{ secrets.VULTR_HOST }}
+          username: ${{ secrets.VULTR_USER }}
+          key: ${{ secrets.VULTR_SSH_KEY }}
+          envs: MYSQL_ROOT_PASSWORD,REDIS_PASSWORD,DB_NAME
           script: |
             PROJECT_DIR="~/app-${{ github.ref_name }}"
             mkdir -p $PROJECT_DIR && cd $PROJECT_DIR
 
+            # Set up .env
             cat <<EOF > .env
             IMAGE_NAME=ghcr.io/${{ github.repository }}:${{ github.ref_name }}
             MYSQL_ROOT_PASSWORD=$MYSQL_ROOT_PASSWORD
             REDIS_PASSWORD=$REDIS_PASSWORD
             DB_NAME=$DB_NAME
-            APP_PORT=$APP_PORT
             EOF
 
+            # Login and Pull
             echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u ${{ github.actor }} --password-stdin
 
-            # Download nginx only for production
-            if [ "${{ github.ref_name }}" == "main" ]; then
-              curl -L https://raw.githubusercontent.com/${{ github.repository }}/main/nginx.conf -o nginx.conf
-            fi
-
+            # Download config files
+            curl -L https://raw.githubusercontent.com/${{ github.repository }}/main/nginx.conf -o nginx.conf
             curl -L https://raw.githubusercontent.com/${{ github.repository }}/main/docker-compose-${{ github.ref_name }}.yaml -o docker-compose.yml
 
+            # Deploy
             docker compose pull
             docker compose up -d --remove-orphans
 
-            # Migrate DB (only on primary server for prod, or always for staging)
-            docker compose exec -T app bunx prisma migrate deploy
+            # Database Migration (Run once on app_1)
+            docker compose exec -T app_1 bunx prisma migrate deploy

@@ -1,44 +1,51 @@
-name: PR Title Check
+name: PR Notify
 
 on:
-  pull_request:
-    types: [opened, edited, synchronize, reopened]
+  pull_request_target:
+    types: [opened, closed, synchronize]
     branches: [main, staging, develop]
 
 jobs:
-  check-title:
-    runs-on: ubuntu-slim
-    steps:
-      - name: Validate PR title (Conventional Commits)
-        uses: amannn/action-semantic-pull-request@v5
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          types: |
-            feat
-            fix
-            docs
-            style
-            refactor
-            perf
-            test
-            chore
-            revert
-          subjectPattern: ^.{1,}$
-          headerPattern: '^(\w*)(?:\(([\w\$\.\-\* ]*)\))?\: (.*)$'
-
-  notify-failure:
-    needs: check-title
-    if: failure()
+  pr-opened:
+    if: github.event.action == 'opened'
     uses: ./.github/workflows/reusable-telegram.yml
     secrets: inherit
     with:
       format: HTML
       message: |
-        <b>❌ PR Title Check Failed</b>
+        <b>🔔 New PR Opened</b>
 
         <b>Project:</b> NodeJS
         <b>Actor:</b> ${{ github.actor }}
         <b>Title:</b> ${{ github.event.pull_request.title }}
+        <b>Branch:</b> <code>${{ github.head_ref }}</code> → <code>${{ github.base_ref }}</code>
+        <b>Commit:</b> <a href="${{ github.event.pull_request.head.sha }}">${{ github.event.pull_request.head.sha }}</a>
 
-        <i>Please follow the Conventional Commits format (e.g., feat: add login).</i>
+  pr-updated:
+    if: github.event.action == 'synchronize'
+    uses: ./.github/workflows/reusable-telegram.yml
+    secrets: inherit
+    with:
+      format: HTML
+      message: |
+        <b>🔄 PR Updated</b>
+        <b>Project:</b> NodeJS
+        <b>Actor:</b> ${{ github.actor }}
+        <b>Title:</b> ${{ github.event.pull_request.title }}
+        <b>Branch:</b> <code>${{ github.head_ref }}</code> → <code>${{ github.base_ref }}</code>
+        <b>Commit:</b> <a href="${{ github.event.pull_request.head.sha }}">${{ github.event.pull_request.head.sha }}</a>
+
+  pr-merged:
+    if: github.event.action == 'closed' && github.event.pull_request.merged == true
+    uses: ./.github/workflows/reusable-telegram.yml
+    secrets: inherit
+    with:
+      format: HTML
+      message: |
+        <b>🔔 PR Merged</b>
+
+        <b>Project:</b> NodeJS
+        <b>Actor:</b> ${{ github.actor }}
+        <b>Title:</b> ${{ github.event.pull_request.title }}
+        <b>Branch:</b> <code>${{ github.head_ref }}</code> → <code>${{ github.base_ref }}</code>
+        <b>Commit:</b> <a href="${{ github.event.pull_request.head.sha }}">${{ github.event.pull_request.head.sha }}</a>
