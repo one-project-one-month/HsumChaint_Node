@@ -13,18 +13,243 @@ datasource db {
   provider = "mysql"
 }
 
-model User {
-  id    Int     @id @default(autoincrement())
-  email String  @unique
-  name  String?
-  posts Post[]
+// Enums
+
+enum UserRole {
+  Monk
+  Donor
 }
 
-model Post {
-  id        Int     @id @default(autoincrement())
-  title     String
-  content   String? @db.Text
-  published Boolean @default(false)
-  author    User    @relation(fields: [authorId], references: [id])
-  authorId  Int
+enum monasteryMemberRole {
+  Owner
+  Editor
+  Viewer
+}
+
+enum DonationStatus {
+  Pending
+  Approved
+  Rejected
+}
+
+enum DonationTypeName {
+  OneTime
+  Monthly
+}
+
+enum NotificationType {
+  invitation
+  donation
+  system
+  hsum_chaint
+}
+
+enum InvitationRole {
+  admin
+  editor
+  viewer
+}
+
+enum InvitationStatus {
+  pending
+  accept
+  reject
+}
+
+model User {
+  id        Int      @id @default(autoincrement())
+  userName  String   @map("user_name")
+  email     String   @unique
+  password  String
+  role      UserRole
+  fcmToken  String?  @map("fcm_token")
+  isActive  Boolean  @default(true)
+  isDeleted Boolean  @map("is_deleted")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  monk              monasteryMember?  @relation("UserMonk", fields: [monkId], references: [id])
+  monkId            Int?              @unique
+  donor             Donor?            @relation(fields: [donorId], references: [id])
+  donorId           Int?              @unique
+
+  refreshTokens       RefreshToken[]
+  userSetting         UserSetting?
+  notifications       Notification[]
+  invitationsReceived Invitation[]    @relation("InvitationInvitee")
+  invitationsSent     Invitation[]    @relation("InvitationInviter")
+  monasteryMembers    monasteryMember[] @relation("UserMembership")
+
+  @@index([email])
+  @@index([role, isActive])
+  @@index([monkId])
+  @@index([donorId])
+  @@map("users")
+}
+
+model Donor {
+  id        Int      @id @default(autoincrement())
+  name      String
+  email     String
+  phoneNo   String   @map("phone_no")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt  @map("updated_at")
+
+  user         User?
+  donationList DonationList[]
+
+  @@unique([id, name])
+  @@index([name, email])
+  @@index([phoneNo])
+  @@index([email])
+  @@map("donors")
+
+}
+
+model Monastery {
+  id              Int      @id @default(autoincrement())
+  name            String
+  description     String?
+  address         String
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  createdById     Int @unique  @map("created_by_id")
+  createdBy       monasteryMember? @relation("MonasteryCreatedBy", fields: [createdById], references: [id])
+  monasteryMember monasteryMember[] @relation("MonasteryMembers")
+  donationList    DonationList[]
+  invitations     Invitation[]
+
+  @@index([name])
+  @@index([address])
+  @@map("monasteries")
+}
+
+
+model RefreshToken {
+  id           Int       @id @default(autoincrement())
+  userId       Int       @map("user_id")
+  refreshToken String    @map("refresh_token")
+  expiresAt    DateTime  @map("expires_at")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  revokedAt    DateTime? @map("revoked_at")
+
+  user         User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("refresh_tokens")
+}
+
+model UserSetting {
+  id                      Int       @id @default(autoincrement())
+  userId                  Int       @unique @map("user_id")
+  pickupTime              DateTime? @map("pickup_time")
+  dropoffTime             DateTime? @map("dropoff_time")
+  dropoffNotificationTime DateTime? @map("dropoff_notification_time")
+  pickupNotificationTime  DateTime? @map("pickup_notification_time")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("user_settings")
+}
+
+model Notification {
+  id        Int             @id @default(autoincrement())
+  userId    Int             @map("user_id")
+  type      NotificationType
+  message   String
+  isRead    Boolean         @default(false) @map("is_read")
+  createdAt DateTime        @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([type])
+  @@map("notifications")
+}
+
+
+model Invitation {
+  id               Int             @id @default(autoincrement())
+  role             InvitationRole
+  status           InvitationStatus @default(pending)
+  createdAt        DateTime        @default(now()) @map("created_at")
+
+  monasteryId      Int             @map("monastery_space_id")
+  monastery  Monastery @relation(fields: [monasteryId], references: [id], onDelete: Cascade)
+  invitedUserId    Int             @map("invited_user_id")
+  invitedUser User     @relation("InvitationInvitee", fields: [invitedUserId], references: [id], onDelete: Cascade)
+  invitedById      Int             @map("invited_by_id")
+  invitedBy   User     @relation("InvitationInviter", fields: [invitedById], references: [id], onDelete: Cascade)
+
+  @@index([monasteryId])
+  @@index([invitedUserId])
+  @@index([invitedById])
+  @@index([status])
+  @@map("invitations")
+}
+
+model monasteryMember {
+  id          Int                 @id @default(autoincrement())
+  role        monasteryMemberRole
+  isOwner     Boolean             @map("is_owner")
+  createdAt   DateTime            @default(now()) @map("created_at")
+  updatedAt   DateTime            @updatedAt  @map("updated_at")
+
+  monasteryId Int                 @map("monastery_id")
+  monastery   Monastery           @relation("MonasteryMembers", fields: [monasteryId], references: [id])
+  userId      Int?                @map("user_id")
+  user        User?               @relation("UserMembership", fields: [userId], references: [id])
+
+  // Opposite field for Monastery.createdBy
+  createdMonastery Monastery?     @relation("MonasteryCreatedBy")
+
+  // Opposite field for User.monk (kept relation unidirectional on purpose)
+  monkUser   User?               @relation("UserMonk")
+  donationListsAsReviewer DonationList[]
+
+  @@index([isOwner])
+  @@index([role])
+  @@map("monastery_members")
+
+}
+
+model DonationList {
+  id              Int            @id @default(autoincrement())
+  status          DonationStatus @default(Pending)
+  donationDueDate DateTime       @map("donation_due_date")
+  createdDate     DateTime       @map("created_date")
+  updatedDate     DateTime?      @map("update_at")
+
+  monasteryId    Int            @map("monastery_id")
+  monastery      Monastery      @relation(fields: [monasteryId], references: [id])
+  donorName      String         @unique @map("donor_name")
+  donorId        Int            @map("donor_id")
+  donor          Donor          @relation(fields: [donorId, donorName], references: [id, name])
+  reviewerId     Int?           @map("reviewer_id")
+  reviewer       monasteryMember? @relation(fields: [reviewerId], references: [id])
+  donationTypeId Int            @map("donation_type_id")
+  donationType   DonationType   @relation(fields: [donationTypeId], references: [id])
+
+  @@index([donorId])
+  @@index([donationTypeId])
+  @@index([monasteryId])
+  @@index([reviewerId])
+  @@index([donorId, donationDueDate])
+  @@index([status])
+  @@map("donation_lists")
+}
+
+model DonationType {
+  id           Int              @id @default(autoincrement())
+  donationType DonationTypeName @map("donation_type")
+  duration     Int    
+  createdAt    DateTime         @default(now())  @map("created_at")
+  updatedAt    DateTime         @updatedAt @map("updated_at")
+
+  donationList DonationList[]
+
+  @@index([donationType])
+  @@map("donation_types")
 }

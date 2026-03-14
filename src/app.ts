@@ -5,6 +5,7 @@ import helmet from 'helmet';
 import cors from 'cors';
 import { rateLimit } from 'express-rate-limit';
 import { userRouter } from './modules/user/user.routes';
+import { donorRouter } from './modules/donor/donor.routes';
 import { swaggerSpec } from './config/swagger';
 import { globalErrorHandler } from './middlewares/errorHandler';
 import { httpLogger } from './middlewares/httpLogger';
@@ -32,6 +33,7 @@ app.use(httpLogger);
 
 // Routes
 app.use('/api/v1/users', userRouter);
+app.use('/api/v1/donors', donorRouter);
 
 // Health check
 app.get('/health', (_, res) => {
