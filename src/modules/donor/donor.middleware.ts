@@ -1,22 +1,20 @@
-import { z } from "zod";
-import { validator } from "../../middlewares/validator";
+import { z } from 'zod';
+import { validator } from '../../middlewares/validator';
 import {
-    idParamSchema,
-    CreateDonorSchema,
-    UpdateDonorSchema,
-    GetAllDonorsQuerySchema,
-} from "./donor.schema";
-import { PaginationQuerySchema } from "../../helper/paginationSchema";
+  idParamSchema,
+  CreateDonorSchema,
+  UpdateDonorSchema,
+  GetAllDonorsQuerySchema,
+} from './donor.schema';
+import { PaginationQuerySchema } from '../../helper/paginationSchema';
 
 const GetAllDonorsFullSchema = z.object({
-    query: GetAllDonorsQuerySchema.shape.query.extend(
-        PaginationQuerySchema.shape,
-    ),
+  query: GetAllDonorsQuerySchema.shape.query.extend(PaginationQuerySchema.shape),
 });
 
 const UpdateDonorFullSchema = z.object({
-    params: idParamSchema.shape.params,
-    body: UpdateDonorSchema.shape.body,
+  params: idParamSchema.shape.params,
+  body: UpdateDonorSchema.shape.body,
 });
 
 export const validateCreateDonor = validator(CreateDonorSchema);
