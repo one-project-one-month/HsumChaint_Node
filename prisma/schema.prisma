@@ -1,9 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
   provider = "prisma-client"
   output   = "../generated/prisma"
@@ -12,21 +6,23 @@ generator client {
 datasource db {
   provider = "mysql"
 }
+
+model User {
+  id        Int      @id @default(autoincrement())
+  phone     String   @unique
+  username  String
+  email     String?  @unique
+  password  String
+  userType  UserType @map("user_type")
+  fcmToken  String?  @map("fcm_token")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  isDeleted Boolean  @default(false) @map("is_deleted")
+
+  @@map("users")
+}
+
 enum UserType {
   Monk
   Donor
 }
-model User {
-  id        Int     @id @default(autoincrement())
-  phone     String  @unique
-  username  String
-  email     String?  @unique
-  password  String  
-  userType  UserType
-  fcmToken  String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  isDeleted Boolean  @default(false)
-}
-
-
