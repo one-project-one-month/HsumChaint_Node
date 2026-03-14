@@ -9,14 +9,14 @@ on:
       format:
         required: false
         type: string
-        default: 'HTML'
+        default: "HTML"
     secrets:
       TELEGRAM_CHAT_ID:
-        required: true
+        required: false
       TELEGRAM_BOT_TOKEN:
-        required: true
+        required: false
       TELEGRAM_GITHUB_TOPIC_ID:
-        required: true
+        required: false
 
 jobs:
   send:
