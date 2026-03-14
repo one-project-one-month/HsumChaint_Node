@@ -77,6 +77,7 @@ export async function getAllDonorsService(
     const { name, email, phoneNo } = query;
     const { page, limit } = pagination;
 
+
     const where: Record<string, any> = {};
 
     if (name) {
@@ -99,6 +100,11 @@ export async function getAllDonorsService(
         }),
         prisma.donor.count({ where }),
     ]);
+
+    if (donors.length === 0) {
+        throw new NotFoundError('No donors found');
+    }
+
 
     const paginationData = generatePaginationData(req, total, page, limit);
 
