@@ -1,13 +1,9 @@
 pre-commit:
   parallel: true
   commands:
-    eslint:
-      glob: 'src/**/*.{ts,tsx}'
-      run: bun run lint
-      stage_fixed: true
-    prettier:
-      glob: 'src/**/*.{ts,tsx,json,md}'
-      run: bun run format
+    biome:
+      glob: 'src/**/*.{ts,tsx,json}'
+      run: bun run check
       stage_fixed: true
 
 commit-msg:

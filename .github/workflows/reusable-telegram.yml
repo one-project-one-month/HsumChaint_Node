@@ -9,14 +9,14 @@ on:
       format:
         required: false
         type: string
-        default: 'HTML'
+        default: "HTML"
     secrets:
       TELEGRAM_CHAT_ID:
-        required: true
+        required: false
       TELEGRAM_BOT_TOKEN:
-        required: true
+        required: false
       TELEGRAM_GITHUB_TOPIC_ID:
-        required: true
+        required: false
 
 jobs:
   send:
@@ -30,8 +30,16 @@ jobs:
           MESSAGE: ${{ inputs.message }}
           FORMAT: ${{ inputs.format }}
         run: |
-          curl -s -X POST "https://api.telegram.org/bot${BOT_TOKEN}/sendMessage" \
+          if [[ -z "$BOT_TOKEN" || -z "$CHAT_ID" || -z "$THREAD_ID" ]]; then
+            echo "❌ One or more required secrets are missing or empty!"
+            echo "  BOT_TOKEN set: $( [[ -n "$BOT_TOKEN" ]] && echo yes || echo NO )"
+            echo "  CHAT_ID set:   $( [[ -n "$CHAT_ID" ]] && echo yes || echo NO )"
+            echo "  THREAD_ID set: $( [[ -n "$THREAD_ID" ]] && echo yes || echo NO )"
+            exit 1
+          fi
+          RESPONSE=$(curl -s --fail -X POST "https://api.telegram.org/bot${BOT_TOKEN}/sendMessage" \
             --data-urlencode "chat_id=${CHAT_ID}" \
             --data-urlencode "message_thread_id=${THREAD_ID}" \
             --data-urlencode "text=${MESSAGE}" \
-            --data-urlencode "parse_mode=${FORMAT}"
+            --data-urlencode "parse_mode=${FORMAT}")
+          echo "Telegram API response: $RESPONSE"
