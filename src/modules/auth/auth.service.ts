@@ -1,8 +1,10 @@
+import type { Prisma } from 'prisma-client';
 import { prisma } from '../../lib/prisma';
-import { RegisterInput } from './auth.schema';
 import { AppError } from '../../utils/AppError';
+import type { LoginInput, RegisterInput } from './auth.schema';
+//register
 export const registerUser = async (data: RegisterInput) => {
-  const conditions: any[] = [{ phone: data.phone }];
+  const conditions: Prisma.UserWhereInput[] = [{ phone: data.phone }];
   if (data.email) {
     conditions.push({ email: data.email });
   }
@@ -31,4 +33,24 @@ export const registerUser = async (data: RegisterInput) => {
     },
   });
   return user;
+};
+//login
+export const loginUser = async (data: LoginInput) => {
+  const user = await prisma.user.findUnique({
+    where: { phone: data.phone, isDeleted: false },
+  });
+  if (!user) {
+    throw new AppError('Invalid phone or password', 401);
+  }
+  const isPasswordMatch = await Bun.password.verify(data.password, user.password);
+  if (!isPasswordMatch) {
+    throw new AppError('Invalid phone or password', 401);
+  }
+  return {
+    id: user.id,
+    phone: user.phone,
+    username: user.username,
+    email: user.email,
+    userType: user.userType,
+  };
 };

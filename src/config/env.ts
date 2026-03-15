@@ -1,6 +1,6 @@
-import { z } from 'zod';
-import dotenv from 'dotenv';
 import consola from 'consola';
+import dotenv from 'dotenv';
+import { z } from 'zod';
 
 dotenv.config();
 

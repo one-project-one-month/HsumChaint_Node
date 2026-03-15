@@ -1,15 +1,15 @@
-import express, { ErrorRequestHandler } from 'express';
+import cors from 'cors';
+import express, { type ErrorRequestHandler } from 'express';
+import { rateLimit } from 'express-rate-limit';
+import helmet from 'helmet';
 import * as swStats from 'swagger-stats';
 import swaggerUi from 'swagger-ui-express';
-import helmet from 'helmet';
-import cors from 'cors';
-import { rateLimit } from 'express-rate-limit';
-import { userRouter } from './modules/user/user.routes';
 import { swaggerSpec } from './config/swagger';
 import { globalErrorHandler } from './middlewares/errorHandler';
 import { httpLogger } from './middlewares/httpLogger';
-import { errorResponse, successResponse } from './utils/response';
 import authRoutes from './modules/auth/auth.routes';
+import { userRouter } from './modules/user/user.routes';
+import { errorResponse, successResponse } from './utils/response';
 const app = express();
 
 // Telescope-like HTML Dashboard (Available at /stats)

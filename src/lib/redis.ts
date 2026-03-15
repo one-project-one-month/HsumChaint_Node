@@ -1,6 +1,6 @@
-import { redis as redisFromBun, RedisClient } from 'bun';
 import { env } from '@/config/env';
 import { logger } from '@/utils/logger';
+import { RedisClient, redis as redisFromBun } from 'bun';
 
 export const redis = env.REDIS_URL ? new RedisClient(env.REDIS_URL) : redisFromBun;
 

@@ -1,7 +1,7 @@
-import { NextFunction, Request, Response } from 'express';
-import { errorResponse } from '../utils/response';
-import { AppError } from '../utils/AppError';
+import type { NextFunction, Request, Response } from 'express';
 import { ZodError } from 'zod';
+import { AppError } from '../utils/AppError';
+import { errorResponse } from '../utils/response';
 
 export const globalErrorHandler = (
   err: unknown,
