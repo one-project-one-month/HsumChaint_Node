@@ -21,7 +21,6 @@ export const login = async (
 ) => {
   try {
     const result = await loginUser(req.body);
-    await res.setHeader('Authorization', `Bearer ${result.accessToken}`);
     return successResponse(res, result, 'Login successful');
   } catch (error) {
     next(error);

@@ -1,4 +1,5 @@
-import { generateAccessToken } from '@/utils/jwt';
+import { env } from '@/config/env';
+import { generateAccessToken, generateRefreshToken } from '@/utils/jwt';
 import type { Prisma } from 'prisma-client';
 import { prisma } from '../../lib/prisma';
 import { AppError } from '../../utils/AppError';
@@ -47,9 +48,24 @@ export const loginUser = async (data: LoginInput) => {
   if (!isPasswordMatch) {
     throw new AppError('Invalid phone or password', 401);
   }
-  const accessToken = generateAccessToken({ userId: user.id, userType: user.userType });
+  const accessToken = generateAccessToken({
+    userId: user.id,
+    userType: user.userType,
+  });
+  const refreshToken = generateRefreshToken({
+    userId: user.id,
+    userType: user.userType,
+  });
+  await prisma.refreshToken.create({
+    data: {
+      userId: user.id,
+      refreshToken,
+      expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+    },
+  });
   return {
     accessToken,
+    refreshToken,
     user: {
       id: user.id,
       phone: user.phone,
