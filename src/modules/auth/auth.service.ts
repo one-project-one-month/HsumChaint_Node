@@ -1,3 +1,4 @@
+import { generateAccessToken } from '@/utils/jwt';
 import type { Prisma } from 'prisma-client';
 import { prisma } from '../../lib/prisma';
 import { AppError } from '../../utils/AppError';
@@ -36,7 +37,7 @@ export const registerUser = async (data: RegisterInput) => {
 };
 //login
 export const loginUser = async (data: LoginInput) => {
-  const user = await prisma.user.findUnique({
+  const user = await prisma.user.findFirst({
     where: { phone: data.phone, isDeleted: false },
   });
   if (!user) {
@@ -46,11 +47,15 @@ export const loginUser = async (data: LoginInput) => {
   if (!isPasswordMatch) {
     throw new AppError('Invalid phone or password', 401);
   }
+  const accessToken = generateAccessToken({ userId: user.id, userType: user.userType });
   return {
-    id: user.id,
-    phone: user.phone,
-    username: user.username,
-    email: user.email,
-    userType: user.userType,
+    accessToken,
+    user: {
+      id: user.id,
+      phone: user.phone,
+      username: user.username,
+      email: user.email,
+      userType: user.userType,
+    },
   };
 };

@@ -20,8 +20,9 @@ export const login = async (
   next: NextFunction
 ) => {
   try {
-    const user = await loginUser(req.body);
-    return successResponse(res, user, 'Login successful');
+    const result = await loginUser(req.body);
+    await res.setHeader('Authorization', `Bearer ${result.accessToken}`);
+    return successResponse(res, result, 'Login successful');
   } catch (error) {
     next(error);
   }
