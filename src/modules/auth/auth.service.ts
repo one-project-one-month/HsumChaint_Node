@@ -125,3 +125,25 @@ export const refreshTokenService = async (refreshToken: string) => {
     refreshToken: newRefreshToken,
   };
 };
+//logout
+export const logoutUser = async (refreshToken: string) => {
+  try {
+    jwt.verify(refreshToken, env.JWT_REFRESH_TOKEN_SECRET);
+  } catch {
+    throw new AppError('Invalid or expired refresh token', 401);
+  }
+  const token = await prisma.refreshToken.findFirst({
+    where: {
+      refreshToken,
+      revokedAt: null,
+    },
+  });
+  if (!token) {
+    throw new AppError('Invalid refresh token', 400);
+  }
+  await prisma.refreshToken.update({
+    where: { id: token.id },
+    data: { revokedAt: new Date() },
+  });
+  return { message: 'Logout successfully' };
+};

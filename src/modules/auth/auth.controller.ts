@@ -1,7 +1,7 @@
 import { successResponse } from '@/utils/response';
 import type { NextFunction, Request, Response } from 'express';
 import type { LoginInput, RegisterInput, refreshTokenInput } from './auth.schema';
-import { loginUser, refreshTokenService, registerUser } from './auth.service';
+import { loginUser, logoutUser, refreshTokenService, registerUser } from './auth.service';
 export const register = async (
   req: Request<unknown, unknown, RegisterInput>,
   res: Response,
@@ -34,6 +34,18 @@ export const refreshAccessToken = async (
   try {
     const result = await refreshTokenService(req.body.refreshToken);
     return successResponse(res, result, 'Token refreshed');
+  } catch (error) {
+    next(error);
+  }
+};
+export const logout = async (
+  req: Request<unknown, unknown, refreshTokenInput>,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const result = await logoutUser(req.body.refreshToken);
+    return successResponse(res, result, 'Logout successfully');
   } catch (error) {
     next(error);
   }
