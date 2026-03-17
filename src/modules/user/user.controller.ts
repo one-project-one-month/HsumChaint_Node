@@ -1,8 +1,8 @@
-import type { Request, Response, NextFunction } from 'express';
-import { userService } from './user.service';
-import { CreateUserSchema } from './user.schema';
-import { successResponse } from '../../utils/response';
+import type { NextFunction, Request, Response } from 'express';
 import { AppError } from '../../utils/AppError';
+import { successResponse } from '../../utils/response';
+import { CreateUserSchema } from './user.schema';
+import { userService } from './user.service';
 
 export class UserController {
   async getAllUsers(_req: Request, res: Response, next: NextFunction) {

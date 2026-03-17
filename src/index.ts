@@ -1,8 +1,8 @@
 import { app } from './app';
-import { logger } from './utils/logger';
 import { env } from './config/env';
 import { prisma } from './lib/prisma';
 import { redis } from './lib/redis';
+import { logger } from './utils/logger';
 
 const PORT = env.PORT || 3000;
 

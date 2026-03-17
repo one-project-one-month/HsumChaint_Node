@@ -1,7 +1,8 @@
-import { Router } from 'express';
-import { register } from './auth.controller';
 import { validator } from '@/middlewares/validator';
-import { registerSchema } from './auth.schema';
+import { Router } from 'express';
+import { login, register } from './auth.controller';
+import { loginSchema, registerSchema } from './auth.schema';
 const router = Router();
 router.post('/register', validator(registerSchema), register);
+router.post('/login', validator(loginSchema), login);
 export default router;
