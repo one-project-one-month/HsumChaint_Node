@@ -1,8 +1,12 @@
+import { env } from '@/config/env';
+import { generateAccessToken, generateRefreshToken } from '@/utils/jwt';
+import type { Prisma } from 'prisma-client';
 import { prisma } from '../../lib/prisma';
-import { RegisterInput } from './auth.schema';
 import { AppError } from '../../utils/AppError';
+import type { LoginInput, RegisterInput } from './auth.schema';
+//register
 export const registerUser = async (data: RegisterInput) => {
-  const conditions: any[] = [{ phone: data.phone }];
+  const conditions: Prisma.UserWhereInput[] = [{ phone: data.phone }];
   if (data.email) {
     conditions.push({ email: data.email });
   }
@@ -31,4 +35,43 @@ export const registerUser = async (data: RegisterInput) => {
     },
   });
   return user;
+};
+//login
+export const loginUser = async (data: LoginInput) => {
+  const user = await prisma.user.findFirst({
+    where: { phone: data.phone, isDeleted: false },
+  });
+  if (!user) {
+    throw new AppError('Invalid phone or password', 401);
+  }
+  const isPasswordMatch = await Bun.password.verify(data.password, user.password);
+  if (!isPasswordMatch) {
+    throw new AppError('Invalid phone or password', 401);
+  }
+  const accessToken = generateAccessToken({
+    userId: user.id,
+    userType: user.userType,
+  });
+  const refreshToken = generateRefreshToken({
+    userId: user.id,
+    userType: user.userType,
+  });
+  await prisma.refreshToken.create({
+    data: {
+      userId: user.id,
+      refreshToken,
+      expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+    },
+  });
+  return {
+    accessToken,
+    refreshToken,
+    user: {
+      id: user.id,
+      phone: user.phone,
+      username: user.username,
+      email: user.email,
+      userType: user.userType,
+    },
+  };
 };

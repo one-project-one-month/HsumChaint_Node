@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'bun:test';
+import { describe, expect, it } from 'bun:test';
 import { UserService } from './user.service';
 
 // Mock the prisma client manually if necessary, but here we can just test the logic
