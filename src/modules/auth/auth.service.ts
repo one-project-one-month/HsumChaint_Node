@@ -1,5 +1,6 @@
 import { env } from '@/config/env';
-import { generateAccessToken, generateRefreshToken } from '@/utils/jwt';
+import { type TokenPayload, generateAccessToken, generateRefreshToken } from '@/utils/jwt';
+import jwt from 'jsonwebtoken';
 import type { Prisma } from 'prisma-client';
 import { prisma } from '../../lib/prisma';
 import { AppError } from '../../utils/AppError';
@@ -73,5 +74,54 @@ export const loginUser = async (data: LoginInput) => {
       email: user.email,
       userType: user.userType,
     },
+  };
+};
+//refresh token
+export const refreshTokenService = async (refreshToken: string) => {
+  let payload: TokenPayload;
+  try {
+    payload = jwt.verify(refreshToken, env.JWT_REFRESH_TOKEN_SECRET) as TokenPayload;
+  } catch {
+    throw new AppError('Invalid or expired refresh token', 401);
+  }
+
+  const storedToken = await prisma.refreshToken.findFirst({
+    where: {
+      refreshToken,
+      userId: payload.userId,
+      revokedAt: null,
+    },
+  });
+  if (!storedToken) {
+    throw new AppError('Invalid refresh token', 401);
+  }
+  //create new access token
+  const newAccessToken = generateAccessToken({
+    userId: payload.userId,
+    userType: payload.userType,
+  });
+
+  //generate new refresh token
+  const newRefreshToken = generateRefreshToken({
+    userId: payload.userId,
+    userType: payload.userType,
+  });
+  //not to lose user session, create DB transactions to revoke new token and to create new token
+  await prisma.$transaction([
+    prisma.refreshToken.update({
+      where: { id: storedToken.id },
+      data: { revokedAt: new Date() },
+    }),
+    prisma.refreshToken.create({
+      data: {
+        userId: payload.userId,
+        refreshToken: newRefreshToken,
+        expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+      },
+    }),
+  ]);
+  return {
+    accessToken: newAccessToken,
+    refreshToken: newRefreshToken,
   };
 };
