@@ -19,6 +19,7 @@ model User {
   updatedAt    DateTime @updatedAt @map("updated_at")
   isDeleted    Boolean  @default(false) @map("is_deleted")
   refreshToken RefreshToken[]
+  resetToken   PasswordResetToken[]
   @@map("users")
 }
 
@@ -36,4 +37,13 @@ model RefreshToken {
   user          User @relation(fields: [userId], references: [id], onDelete: Cascade)
   @@index([refreshToken, revokedAt])
   @@map("refresh_tokens")
+}
+model PasswordResetToken {
+  id          Int       @id @default (autoincrement())
+  userId      Int       @map("user_id")
+  resetToken  String    @unique @map("reset_token")
+  expiresAt   DateTime  @map("expires_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  user        User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@map("password_reset_tokens")
 }
