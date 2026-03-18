@@ -1,3 +1,4 @@
+import { authMiddleware } from '@/middlewares/authMiddleWare';
 import { Router } from 'express';
 import { userController } from './user.controller';
 
@@ -5,6 +6,7 @@ const router = Router();
 
 router.get('/', userController.getAllUsers);
 
+router.get('/me', authMiddleware, userController.getMe);
 router.get('/:id', userController.getUserById);
 
 router.post('/', userController.createUser);
