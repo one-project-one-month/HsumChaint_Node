@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 import { env } from '@/config/env';
 import { type TokenPayload, generateAccessToken, generateRefreshToken } from '@/utils/jwt';
 import jwt from 'jsonwebtoken';
@@ -165,4 +166,23 @@ export const logoutUser = async (refreshToken: string) => {
     data: { revokedAt: new Date() },
   });
   return { message: 'Logout successfully' };
+};
+//forgot password handle
+export const forgotPasswordService = async (phone: string) => {
+  const user = await prisma.user.findUnique({
+    where: { phone },
+  });
+  if (!user) {
+    throw new AppError('User is not found', 404);
+  }
+  const rawResetToken = crypto.randomBytes(32).toString('hex');
+  const hashResetToken = crypto.createHash('sha256').update(rawResetToken).digest('hex');
+  await prisma.passwordResetToken.create({
+    data: {
+      userId: user.id,
+      resetToken: hashResetToken,
+      expiresAt: new Date(Date.now() + 15 * 60 * 1000),
+    },
+  });
+  return { rawResetToken };
 };
