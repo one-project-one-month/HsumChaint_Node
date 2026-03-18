@@ -8,8 +8,8 @@ export const register = async (
   next: NextFunction
 ) => {
   try {
-    const user = await registerUser(req.body);
-    return successResponse(res, user, 'Register successful');
+    const result = await registerUser(req.body);
+    return successResponse(res, result, 'Register successful');
   } catch (error) {
     next(error);
   }
