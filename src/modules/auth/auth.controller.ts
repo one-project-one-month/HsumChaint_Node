@@ -5,6 +5,7 @@ import type {
   RegisterInput,
   forgotPasswordInput,
   refreshTokenInput,
+  resetPasswordInput,
 } from './auth.schema';
 import {
   forgotPasswordService,
@@ -12,6 +13,7 @@ import {
   logoutUser,
   refreshTokenService,
   registerUser,
+  resetPasswordService,
 } from './auth.service';
 export const register = async (
   req: Request<unknown, unknown, RegisterInput>,
@@ -69,6 +71,18 @@ export const forgotPassword = async (
   try {
     const result = await forgotPasswordService(req.body.phone);
     return successResponse(res, result, 'Reset Token generated successfully');
+  } catch (error) {
+    next(error);
+  }
+};
+export const resetPassword = async (
+  req: Request<unknown, unknown, resetPasswordInput>,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const result = await resetPasswordService(req.body);
+    return successResponse(res, result, 'Password reset successfully');
   } catch (error) {
     next(error);
   }

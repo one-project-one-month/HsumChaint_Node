@@ -44,13 +44,14 @@ export const forgotPasswordSchema = z.object({
     phone: phoneSchema,
   }),
 });
-export const resetTokenSchema = z.object({
+export const resetPasswordSchema = z.object({
   body: z.object({
     resetToken: z.string().min(1),
+    password: passwordSchema,
   }),
 });
 export type RegisterInput = z.infer<typeof registerSchema>['body'];
 export type LoginInput = z.infer<typeof loginSchema>['body'];
 export type refreshTokenInput = z.infer<typeof refreshTokenSchema>['body'];
 export type forgotPasswordInput = z.infer<typeof forgotPasswordSchema>['body'];
-export type resetTokenInput = z.infer<typeof resetTokenSchema>['body'];
+export type resetPasswordInput = z.infer<typeof resetPasswordSchema>['body'];
