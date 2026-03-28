@@ -20,8 +20,17 @@ export const login = async (
   next: NextFunction
 ) => {
   try {
-    const result = await loginUser(req.body);
-    return successResponse(res, result, 'Login successful');
+    const { user, accessToken, refreshToken } = await loginUser(req.body);
+    //set refresh token in cookie
+    res.cookie('refreshToken', refreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 30 * 24 * 60 * 60 * 1000,
+    });
+    res.setHeader('Authorization', `Bearer ${accessToken}`);
+    //return only accessToken + user
+    return successResponse(res, { accessToken, user }, 'Login successful');
   } catch (error) {
     next(error);
   }
