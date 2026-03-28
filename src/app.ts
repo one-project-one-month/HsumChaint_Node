@@ -10,6 +10,7 @@ import { httpLogger } from './middlewares/httpLogger';
 import authRoutes from './modules/auth/auth.routes';
 import { userRouter } from './modules/user/user.routes';
 import { errorResponse, successResponse } from './utils/response';
+import cookieParser from 'cookie-parser';
 const app = express();
 
 // Telescope-like HTML Dashboard (Available at /stats)
@@ -26,10 +27,10 @@ app.use(rateLimit({ windowMs: 15 * 60 * 1000, max: 100 }));
 // Body parsing (Must be above logging to see req.body)
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
-
+//parses cookies
+app.use(cookieParser());
 // Logging
 app.use(httpLogger);
-
 // Routes
 app.use('/api/v1/users', userRouter);
 app.use('/api/v1/auth', authRoutes);
