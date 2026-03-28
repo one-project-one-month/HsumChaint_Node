@@ -1,6 +1,7 @@
+import { AppError } from '@/utils/AppError';
 import { successResponse } from '@/utils/response';
 import type { NextFunction, Request, Response } from 'express';
-import type { LoginInput, RegisterInput, refreshTokenInput } from './auth.schema';
+import type { LoginInput, RegisterInput } from './auth.schema';
 import { loginUser, refreshTokenService, registerUser } from './auth.service';
 export const register = async (
   req: Request<unknown, unknown, RegisterInput>,
@@ -35,13 +36,13 @@ export const login = async (
     next(error);
   }
 };
-export const refreshAccessToken = async (
-  req: Request<unknown, unknown, refreshTokenInput>,
-  res: Response,
-  next: NextFunction
-) => {
+export const refreshAccessToken = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const result = await refreshTokenService(req.body.refreshToken);
+    const refreshToken = req.cookies?.refreshToken;
+    if (!refreshToken) {
+      throw new AppError('Refresh token missing', 401);
+    }
+    const result = await refreshTokenService(refreshToken);
     return successResponse(res, result, 'Token refreshed');
   } catch (error) {
     next(error);

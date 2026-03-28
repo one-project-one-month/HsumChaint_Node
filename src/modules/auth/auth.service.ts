@@ -122,6 +122,5 @@ export const refreshTokenService = async (refreshToken: string) => {
   ]);
   return {
     accessToken: newAccessToken,
-    refreshToken: newRefreshToken,
   };
 };
