@@ -5,7 +5,7 @@ import jwt from 'jsonwebtoken';
 import type { Prisma } from 'prisma-client';
 import { prisma } from '../../lib/prisma';
 import { AppError } from '../../utils/AppError';
-import type { LoginInput, RegisterInput, resetPasswordInput } from './auth.schema';
+import type { LoginInput, RegisterInput } from './auth.schema';
 //register
 export const registerUser = async (data: RegisterInput) => {
   const conditions: Prisma.UserWhereInput[] = [{ phone: data.phone }];
@@ -120,7 +120,6 @@ export const refreshTokenService = async (refreshToken: string) => {
     userId: payload.userId,
     userType: payload.userType,
   });
-
   //generate new refresh token
   const newRefreshToken = generateRefreshToken({
     userId: payload.userId,
@@ -147,14 +146,18 @@ export const refreshTokenService = async (refreshToken: string) => {
 };
 //logout
 export const logoutUser = async (refreshToken: string) => {
+  let payload: TokenPayload;
+  //decodes jwt and stores it in payload
   try {
-    jwt.verify(refreshToken, env.JWT_REFRESH_TOKEN_SECRET);
+    payload = jwt.verify(refreshToken, env.JWT_REFRESH_TOKEN_SECRET) as TokenPayload;
   } catch {
     throw new AppError('Invalid or expired refresh token', 401);
   }
+  //include userId check to prevent edge-case abuse
   const token = await prisma.refreshToken.findFirst({
     where: {
       refreshToken,
+      userId: payload.userId,
       revokedAt: null,
     },
   });
@@ -166,43 +169,4 @@ export const logoutUser = async (refreshToken: string) => {
     data: { revokedAt: new Date() },
   });
   return { message: 'Logout successfully' };
-};
-//forgot password handle
-export const forgotPasswordService = async (phone: string) => {
-  const user = await prisma.user.findUnique({
-    where: { phone },
-  });
-  if (!user) {
-    throw new AppError('User is not found', 404);
-  }
-  const rawResetToken = crypto.randomBytes(32).toString('hex');
-  const hashResetToken = crypto.createHash('sha256').update(rawResetToken).digest('hex');
-  await prisma.passwordResetToken.create({
-    data: {
-      userId: user.id,
-      resetToken: hashResetToken,
-      expiresAt: new Date(Date.now() + 15 * 60 * 1000),
-    },
-  });
-  return { rawResetToken };
-};
-//reset password handle
-export const resetPasswordService = async (result: resetPasswordInput) => {
-  const hashedToken = crypto.createHash('sha256').update(result.resetToken).digest('hex');
-  const resetToken = await prisma.passwordResetToken.findUnique({
-    where: { resetToken: hashedToken },
-  });
-  if (!resetToken || resetToken.expiresAt < new Date()) {
-    throw new AppError('Invalid or expired token', 400);
-  }
-  const hashedPassword = await Bun.password.hash(result.password);
-  await prisma.$transaction([
-    prisma.user.update({
-      where: { id: resetToken.userId },
-      data: { password: hashedPassword },
-    }),
-    prisma.passwordResetToken.delete({
-      where: { id: resetToken.id },
-    }),
-  ]);
 };

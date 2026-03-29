@@ -15,14 +15,6 @@ export class UserService {
   async getUserById(id: number): Promise<User | null> {
     return prisma.user.findUnique({
       where: { id },
-      select: {
-        id: true,
-        phone: true,
-        username: true,
-        email: true,
-        userType: true,
-        createdAt: true,
-      },
     }) as unknown as User | null;
   }
 

@@ -34,24 +34,18 @@ export const loginSchema = z.object({
     })
     .strict(),
 });
-export const refreshTokenSchema = z.object({
-  body: z.object({
-    refreshToken: z.string().min(1),
-  }),
-});
-export const forgotPasswordSchema = z.object({
-  body: z.object({
-    phone: phoneSchema,
-  }),
-});
-export const resetPasswordSchema = z.object({
-  body: z.object({
-    resetToken: z.string().min(1),
-    password: passwordSchema,
-  }),
-});
+export const refreshTokenSchema = z
+  .object({
+    body: z.object({
+      refreshToken: z.string().optional(),
+    }),
+    cookies: z.object({
+      refreshToken: z.string().optional(),
+    }),
+  })
+  .refine((data) => data.body.refreshToken || data.cookies.refreshToken, {
+    message: 'Refresh token is required',
+    path: ['refreshToken'],
+  });
 export type RegisterInput = z.infer<typeof registerSchema>['body'];
 export type LoginInput = z.infer<typeof loginSchema>['body'];
-export type refreshTokenInput = z.infer<typeof refreshTokenSchema>['body'];
-export type forgotPasswordInput = z.infer<typeof forgotPasswordSchema>['body'];
-export type resetPasswordInput = z.infer<typeof resetPasswordSchema>['body'];
