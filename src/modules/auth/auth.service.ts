@@ -100,7 +100,6 @@ export const refreshTokenService = async (refreshToken: string) => {
     userId: payload.userId,
     userType: payload.userType,
   });
-
   //generate new refresh token
   const newRefreshToken = generateRefreshToken({
     userId: payload.userId,
@@ -122,5 +121,32 @@ export const refreshTokenService = async (refreshToken: string) => {
   ]);
   return {
     accessToken: newAccessToken,
+    refreshToken: newRefreshToken,
   };
+};
+//logout
+export const logoutUser = async (refreshToken: string) => {
+  let payload: TokenPayload;
+  //decodes jwt and stores it in payload
+  try {
+    payload = jwt.verify(refreshToken, env.JWT_REFRESH_TOKEN_SECRET) as TokenPayload;
+  } catch {
+    throw new AppError('Invalid or expired refresh token', 401);
+  }
+  //include userId check to prevent edge-case abuse
+  const token = await prisma.refreshToken.findFirst({
+    where: {
+      refreshToken,
+      userId: payload.userId,
+      revokedAt: null,
+    },
+  });
+  if (!token) {
+    throw new AppError('Invalid refresh token', 400);
+  }
+  await prisma.refreshToken.update({
+    where: { id: token.id },
+    data: { revokedAt: new Date() },
+  });
+  return { message: 'Logout successfully' };
 };

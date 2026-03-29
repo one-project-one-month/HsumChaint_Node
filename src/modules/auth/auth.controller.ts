@@ -2,7 +2,7 @@ import { AppError } from '@/utils/AppError';
 import { successResponse } from '@/utils/response';
 import type { NextFunction, Request, Response } from 'express';
 import type { LoginInput, RegisterInput } from './auth.schema';
-import { loginUser, refreshTokenService, registerUser } from './auth.service';
+import { loginUser, logoutUser, refreshTokenService, registerUser } from './auth.service';
 export const register = async (
   req: Request<unknown, unknown, RegisterInput>,
   res: Response,
@@ -43,7 +43,31 @@ export const refreshAccessToken = async (req: Request, res: Response, next: Next
       throw new AppError('Refresh token missing', 401);
     }
     const result = await refreshTokenService(refreshToken);
-    return successResponse(res, result, 'Token refreshed');
+    //update cookie with new refresh token
+    res.cookie('refreshToken', result.refreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 30 * 24 * 60 * 60 * 1000,
+    });
+    return successResponse(res, { accessToken: result.accessToken }, 'Token refreshed');
+  } catch (error) {
+    next(error);
+  }
+};
+export const logout = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const refreshToken = req.cookies?.refreshToken;
+    if (!refreshToken) {
+      throw new AppError('Refresh Token is missing', 401);
+    }
+    await logoutUser(refreshToken);
+    res.clearCookie('refreshToken', {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+    });
+    return successResponse(res, null, 'Logout successfully');
   } catch (error) {
     next(error);
   }
