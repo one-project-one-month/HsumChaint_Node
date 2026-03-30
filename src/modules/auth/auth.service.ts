@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 import { env } from '@/config/env';
 import { type TokenPayload, generateAccessToken, generateRefreshToken } from '@/utils/jwt';
 import jwt from 'jsonwebtoken';
@@ -21,21 +22,40 @@ export const registerUser = async (data: RegisterInput) => {
     throw new AppError('User already exists', 400);
   }
   const hashedPassword = await Bun.password.hash(data.password);
-  const user = await prisma.user.create({
-    data: {
-      ...data,
-      password: hashedPassword,
-    },
-    select: {
-      id: true,
-      phone: true,
-      username: true,
-      email: true,
-      userType: true,
-      createdAt: true,
-    },
+  const result = await prisma.$transaction(async (tx) => {
+    const user = await tx.user.create({
+      data: {
+        ...data,
+        password: hashedPassword,
+      },
+      select: {
+        id: true,
+        phone: true,
+        username: true,
+        email: true,
+        userType: true,
+        createdAt: true,
+      },
+    });
+    //create tokens for auto login after register
+    const accessToken = generateAccessToken({
+      userId: user.id,
+      userType: user.userType,
+    });
+    const refreshToken = generateRefreshToken({
+      userId: user.id,
+      userType: user.userType,
+    });
+    await tx.refreshToken.create({
+      data: {
+        userId: user.id,
+        refreshToken,
+        expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+      },
+    });
+    return { accessToken, refreshToken, user };
   });
-  return user;
+  return result;
 };
 //login
 export const loginUser = async (data: LoginInput) => {

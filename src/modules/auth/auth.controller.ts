@@ -9,8 +9,8 @@ export const register = async (
   next: NextFunction
 ) => {
   try {
-    const user = await registerUser(req.body);
-    return successResponse(res, user, 'Register successful');
+    const result = await registerUser(req.body);
+    return successResponse(res, result, 'Register successful');
   } catch (error) {
     next(error);
   }
@@ -21,24 +21,24 @@ export const login = async (
   next: NextFunction
 ) => {
   try {
-    const { user, accessToken, refreshToken } = await loginUser(req.body);
+    const result = await loginUser(req.body);
     //set refresh token in cookie
-    res.cookie('refreshToken', refreshToken, {
+    res.cookie('refreshToken', result.refreshToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
       maxAge: 30 * 24 * 60 * 60 * 1000,
     });
-    res.setHeader('Authorization', `Bearer ${accessToken}`);
+    res.setHeader('Authorization', `Bearer ${result.accessToken}`);
     //return only accessToken + user
-    return successResponse(res, { accessToken, user }, 'Login successful');
+    return successResponse(res, result, 'Login successful');
   } catch (error) {
     next(error);
   }
 };
 export const refreshAccessToken = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const refreshToken = req.cookies?.refreshToken;
+    const refreshToken = req.cookies.refreshToken || req.body.refreshToken;
     if (!refreshToken) {
       throw new AppError('Refresh token missing', 401);
     }
@@ -50,14 +50,14 @@ export const refreshAccessToken = async (req: Request, res: Response, next: Next
       sameSite: 'lax',
       maxAge: 30 * 24 * 60 * 60 * 1000,
     });
-    return successResponse(res, { accessToken: result.accessToken }, 'Token refreshed');
+    return successResponse(res, result, 'Token refreshed');
   } catch (error) {
     next(error);
   }
 };
 export const logout = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const refreshToken = req.cookies?.refreshToken;
+    const refreshToken = req.cookies.refreshToken || req.body.refreshToken;
     if (!refreshToken) {
       throw new AppError('Refresh Token is missing', 401);
     }

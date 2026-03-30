@@ -1,10 +1,10 @@
 import { validator } from '@/middlewares/validator';
 import { Router } from 'express';
 import { login, logout, refreshAccessToken, register } from './auth.controller';
-import { loginSchema, registerSchema } from './auth.schema';
+import { loginSchema, refreshTokenSchema, registerSchema } from './auth.schema';
 const router = Router();
 router.post('/register', validator(registerSchema), register);
 router.post('/login', validator(loginSchema), login);
-router.post('/refresh-token', refreshAccessToken);
-router.post('/logout', logout);
+router.post('/refresh-token', validator(refreshTokenSchema), refreshAccessToken);
+router.post('/logout', validator(refreshTokenSchema), logout);
 export default router;
