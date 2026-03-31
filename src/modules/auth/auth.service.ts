@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import { createAuthSession } from '@/Helper/createAuthSession';
 import { env } from '@/config/env';
 import { type TokenPayload, generateAccessToken, generateRefreshToken } from '@/utils/jwt';
 import jwt from 'jsonwebtoken';
@@ -65,21 +66,7 @@ export const registerUser = async (data: RegisterInput) => {
       });
     }
     //create tokens for auto login after register
-    const accessToken = generateAccessToken({
-      userId: user.id,
-      userType: user.userType,
-    });
-    const refreshToken = generateRefreshToken({
-      userId: user.id,
-      userType: user.userType,
-    });
-    await tx.refreshToken.create({
-      data: {
-        userId: user.id,
-        refreshToken,
-        expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-      },
-    });
+    const { accessToken, refreshToken } = await createAuthSession(tx, user.id, user.userType);
     return { accessToken, refreshToken, user, monkProfile };
   });
   return result;
@@ -97,21 +84,7 @@ export const loginUser = async (data: LoginInput) => {
   if (!isPasswordMatch) {
     throw new AppError('Invalid phone or password', 401);
   }
-  const accessToken = generateAccessToken({
-    userId: user.id,
-    userType: user.userType,
-  });
-  const refreshToken = generateRefreshToken({
-    userId: user.id,
-    userType: user.userType,
-  });
-  await prisma.refreshToken.create({
-    data: {
-      userId: user.id,
-      refreshToken,
-      expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-    },
-  });
+  const { accessToken, refreshToken } = await createAuthSession(prisma, user.id, user.userType);
   return {
     accessToken,
     refreshToken,
@@ -121,6 +94,7 @@ export const loginUser = async (data: LoginInput) => {
       username: user.username,
       email: user.email,
       userType: user.userType,
+      contactPhone: user.contactPhone,
       //if the user is Monk, return the monkProfile
       monkProfile: user.userType === 'Monk' ? user.monkProfile : null,
     },
@@ -145,34 +119,20 @@ export const refreshTokenService = async (refreshToken: string) => {
   if (!storedToken) {
     throw new AppError('Invalid refresh token', 401);
   }
-  //create new access token
-  const newAccessToken = generateAccessToken({
-    userId: payload.userId,
-    userType: payload.userType,
-  });
-  //generate new refresh token
-  const newRefreshToken = generateRefreshToken({
-    userId: payload.userId,
-    userType: payload.userType,
-  });
-  //not to lose user session, create DB transactions to revoke new token and to create new token
-  await prisma.$transaction([
-    prisma.refreshToken.update({
+  // Use a transaction to ensure we revoke the old and create the new session safely
+  return await prisma.$transaction(async (tx) => {
+    await tx.refreshToken.update({
       where: { id: storedToken.id },
       data: { revokedAt: new Date() },
-    }),
-    prisma.refreshToken.create({
-      data: {
-        userId: payload.userId,
-        refreshToken: newRefreshToken,
-        expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-      },
-    }),
-  ]);
-  return {
-    accessToken: newAccessToken,
-    refreshToken: newRefreshToken,
-  };
+    });
+    //use the createAuthSession helper to create new (refreshToken + accessToken) session
+    const { accessToken, refreshToken: newRefreshToken } = await createAuthSession(
+      tx,
+      payload.userId,
+      payload.userType
+    );
+    return { accessToken, refreshToken: newRefreshToken };
+  });
 };
 //logout
 export const logoutUser = async (refreshToken: string) => {
