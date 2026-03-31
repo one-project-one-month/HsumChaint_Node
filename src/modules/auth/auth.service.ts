@@ -21,12 +21,24 @@ export const registerUser = async (data: RegisterInput) => {
   if (existingUser) {
     throw new AppError('User already exists', 400);
   }
+  if (data.contactPhone) {
+    const existingContactPhone = await prisma.user.findFirst({
+      where: { contactPhone: data.contactPhone },
+    });
+    if (existingContactPhone) {
+      throw new AppError('Contact phone already used', 400);
+    }
+  }
   const hashedPassword = await Bun.password.hash(data.password);
   const result = await prisma.$transaction(async (tx) => {
     const user = await tx.user.create({
       data: {
-        ...data,
+        phone: data.phone,
+        username: data.username,
+        email: data.email,
         password: hashedPassword,
+        userType: data.userType,
+        contactPhone: data.contactPhone,
       },
       select: {
         id: true,
@@ -35,8 +47,23 @@ export const registerUser = async (data: RegisterInput) => {
         email: true,
         userType: true,
         createdAt: true,
+        contactPhone: true,
       },
     });
+    let monkProfile = null;
+    //if the use is Monk create monk profile
+    if (user.userType === 'Monk') {
+      if (!data.monasteryName || !data.monasteryAddress) {
+        throw new AppError('Monastery name and address are required for Monk users', 400);
+      }
+      monkProfile = await tx.monkProfile.create({
+        data: {
+          userId: user.id,
+          monasteryName: data.monasteryName,
+          monasteryAddress: data.monasteryAddress,
+        },
+      });
+    }
     //create tokens for auto login after register
     const accessToken = generateAccessToken({
       userId: user.id,
@@ -53,14 +80,15 @@ export const registerUser = async (data: RegisterInput) => {
         expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
       },
     });
-    return { accessToken, refreshToken, user };
+    return { accessToken, refreshToken, user, monkProfile };
   });
   return result;
 };
 //login
 export const loginUser = async (data: LoginInput) => {
-  const user = await prisma.user.findFirst({
+  const user = await prisma.user.findUnique({
     where: { phone: data.phone, isDeleted: false },
+    include: { monkProfile: true }, //will be null for donor
   });
   if (!user) {
     throw new AppError('Invalid phone or password', 401);
@@ -93,6 +121,8 @@ export const loginUser = async (data: LoginInput) => {
       username: user.username,
       email: user.email,
       userType: user.userType,
+      //if the user is Monk, return the monkProfile
+      monkProfile: user.userType === 'Monk' ? user.monkProfile : null,
     },
   };
 };
@@ -120,7 +150,6 @@ export const refreshTokenService = async (refreshToken: string) => {
     userId: payload.userId,
     userType: payload.userType,
   });
-
   //generate new refresh token
   const newRefreshToken = generateRefreshToken({
     userId: payload.userId,
@@ -147,14 +176,18 @@ export const refreshTokenService = async (refreshToken: string) => {
 };
 //logout
 export const logoutUser = async (refreshToken: string) => {
+  let payload: TokenPayload;
+  //decodes jwt and stores it in payload
   try {
-    jwt.verify(refreshToken, env.JWT_REFRESH_TOKEN_SECRET);
+    payload = jwt.verify(refreshToken, env.JWT_REFRESH_TOKEN_SECRET) as TokenPayload;
   } catch {
     throw new AppError('Invalid or expired refresh token', 401);
   }
+  //include userId check to prevent edge-case abuse
   const token = await prisma.refreshToken.findFirst({
     where: {
       refreshToken,
+      userId: payload.userId,
       revokedAt: null,
     },
   });

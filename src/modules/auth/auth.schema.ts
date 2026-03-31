@@ -14,17 +14,41 @@ const passwordSchema = z
   .string('password is required')
   .min(6, 'password must be at least 6 characters');
 export const registerSchema = z.object({
-  body: z.object({
-    phone: phoneSchema,
-    username: z
-      .string('username is required')
-      .trim()
-      .min(3, 'Username must be at least 3 characters'),
-    email: z.string().trim().toLowerCase().email('Invalid email').optional(),
-    password: passwordSchema,
-    userType: z.enum(['Monk', 'Donor']),
-    fcmToken: z.string().optional(),
-  }),
+  body: z
+    .object({
+      phone: phoneSchema,
+      username: z
+        .string('username is required')
+        .trim()
+        .min(3, 'Username must be at least 3 characters'),
+      email: z.string().trim().toLowerCase().email('Invalid email').optional(),
+      contactPhone: phoneSchema.optional(),
+      password: passwordSchema,
+      userType: z.enum(['Monk', 'Donor']),
+      monasteryName: z.string().optional(),
+      monasteryAddress: z.string().optional(),
+      fcmToken: z.string().optional(),
+    })
+    .superRefine((data, ctx) => {
+      if (data.userType === 'Monk') {
+        //add custom issue to monasteryName
+        if (!data.monasteryName) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: 'Monastery name is required',
+            path: ['monasteryName'],
+          });
+        }
+        //add custom issue to monasteryAddress
+        if (!data.monasteryAddress) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: 'Monastery address is required',
+            path: ['monasteryAddress'],
+          });
+        }
+      }
+    }),
 });
 export const loginSchema = z.object({
   body: z
@@ -34,11 +58,19 @@ export const loginSchema = z.object({
     })
     .strict(),
 });
-export const refreshTokenSchema = z.object({
-  body: z.object({
-    refreshToken: z.string().min(1),
-  }),
-});
+export const refreshTokenSchema = z
+  .object({
+    body: z.object({
+      refreshToken: z.string().optional(),
+    }),
+    cookies: z.object({
+      refreshToken: z.string().optional(),
+    }),
+  })
+  .refine((data) => data.body.refreshToken || data.cookies.refreshToken, {
+    message: 'Refresh token is required',
+    path: ['refreshToken'],
+  });
 export const forgotPasswordSchema = z.object({
   body: z.object({
     phone: phoneSchema,
@@ -52,6 +84,5 @@ export const resetPasswordSchema = z.object({
 });
 export type RegisterInput = z.infer<typeof registerSchema>['body'];
 export type LoginInput = z.infer<typeof loginSchema>['body'];
-export type refreshTokenInput = z.infer<typeof refreshTokenSchema>['body'];
 export type forgotPasswordInput = z.infer<typeof forgotPasswordSchema>['body'];
 export type resetPasswordInput = z.infer<typeof resetPasswordSchema>['body'];
