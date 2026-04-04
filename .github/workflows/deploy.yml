@@ -88,6 +88,9 @@ jobs:
             docker compose pull
             docker compose up -d --remove-orphans
 
-            # Database Migration
-            APP_SERVICE=${{ github.ref_name == 'main' && 'app_1' || 'app' }}
-            docker compose exec -T $APP_SERVICE bunx prisma migrate deploy
+            # Database Migration (use bun image since app container doesn't have bun)
+            docker run --rm --network app-develop_app-network \
+              --env-file .env \
+              -v $PROJECT_DIR/prisma:/app/prisma \
+              -w /app \
+              oven/bun:1.3.10 bunx prisma migrate deploy
