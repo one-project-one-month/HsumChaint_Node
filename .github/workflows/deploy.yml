@@ -48,7 +48,7 @@ jobs:
           passphrase: ${{ secrets.DO_SSH_PASSPHRASE }}
           envs: MYSQL_ROOT_PASSWORD,REDIS_PASSWORD,DB_NAME
           script: |
-            PROJECT_DIR="~/app-${{ github.ref_name }}"
+            PROJECT_DIR="$HOME/app-${{ github.ref_name }}"
             mkdir -p $PROJECT_DIR && cd $PROJECT_DIR
 
             # Set up .env

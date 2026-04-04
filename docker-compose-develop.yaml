@@ -4,7 +4,7 @@ services:
     container_name: hsumchaint_node_develop
     restart: unless-stopped
     ports:
-      - "3001:3000" # Direct access for develop
+      - "8081:3000" # Direct access for develop
     environment:
       - NODE_ENV=development
       - DATABASE_URL=mysql://root:${MYSQL_ROOT_PASSWORD}@mysql:3306/${DB_NAME}
