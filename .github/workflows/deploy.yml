@@ -59,8 +59,8 @@ jobs:
             echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u ${{ github.actor }} --password-stdin
 
             # Download config files
-            curl -L https://raw.githubusercontent.com/${{ github.repository }}/main/nginx.conf -o nginx.conf
-            curl -L https://raw.githubusercontent.com/${{ github.repository }}/main/docker-compose-${{ github.ref_name }}.yaml -o docker-compose.yml
+            curl -L https://raw.githubusercontent.com/${{ github.repository }}/${{ github.ref_name }}/nginx.conf -o nginx.conf
+            curl -L https://raw.githubusercontent.com/${{ github.repository }}/${{ github.ref_name }}/docker-compose-${{ github.ref_name }}.yaml -o docker-compose.yml
 
             # Deploy
             docker compose pull
