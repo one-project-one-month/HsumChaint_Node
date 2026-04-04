@@ -97,6 +97,7 @@ jobs:
             docker run --rm \
               --network app-${{ github.ref_name }}_app-network \
               --env-file $PROJECT_DIR/.env \
+              -e DATABASE_URL="mysql://root:$MYSQL_ROOT_PASSWORD@mysql:3306/$DB_NAME" \
               -v $PROJECT_DIR/prisma:/app/prisma \
               -v $PROJECT_DIR/prisma.config.ts:/app/prisma.config.ts \
               -w /app \
