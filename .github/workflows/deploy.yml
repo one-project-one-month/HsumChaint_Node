@@ -88,8 +88,10 @@ jobs:
             docker compose pull
             docker compose up -d --remove-orphans
 
-            # Database Migration (use bun image since app container doesn't have bun)
-            docker run --rm --network app-develop_app-network \
+            # Database Migration (extract prisma files then run with bun image)
+            APP_CONTAINER=${{ github.ref_name == 'main' && 'hsumchaint_node_production' || 'hsumchaint_node_develop' }}
+            docker cp $APP_CONTAINER:/app/prisma $PROJECT_DIR/prisma
+            docker run --rm --network app-${{ github.ref_name }}_app-network \
               --env-file .env \
               -v $PROJECT_DIR/prisma:/app/prisma \
               -w /app \
