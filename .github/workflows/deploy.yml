@@ -95,4 +95,4 @@ jobs:
               --env-file .env \
               -v $PROJECT_DIR/prisma:/app/prisma \
               -w /app \
-              oven/bun:1.3.10 bunx prisma migrate deploy
+              oven/bun:1.3.10 bunx prisma migrate deploy --schema /app/prisma/schema.prisma
