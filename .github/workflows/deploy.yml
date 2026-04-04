@@ -33,7 +33,7 @@ jobs:
   deploy:
     needs: build-and-push
     runs-on: ubuntu-latest
-    environment: ${{ github.ref_name == 'main' || 'develop' }}
+    environment: ${{ github.ref_name == 'main' && 'production' || 'development' }}
     steps:
       - name: Deploy to DigitalOcean via SSH
         uses: appleboy/ssh-action@v1.0.3
