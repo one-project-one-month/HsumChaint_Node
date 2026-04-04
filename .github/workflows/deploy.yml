@@ -2,7 +2,7 @@ name: Release & Deploy
 
 on:
   push:
-    branches: [main, staging]
+    branches: [main, develop]
 
 jobs:
   build-and-push:
@@ -21,14 +21,14 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: .
-          file: ./docker/${{ github.ref_name == 'main' && 'production' || 'staging' }}.Dockerfile
+          file: ./docker/${{ github.ref_name == 'main' && 'production' || 'develop' }}.Dockerfile
           push: true
           tags: ghcr.io/${{ github.repository }}:${{ github.ref_name }}
 
   deploy:
     needs: build-and-push
     runs-on: ubuntu-latest
-    environment: ${{ github.ref_name == 'main' || 'staging' }}
+    environment: ${{ github.ref_name == 'main' || 'develop' }}
     steps:
       - name: Deploy to Vultr via SSH
         uses: appleboy/ssh-action@v1.0.3

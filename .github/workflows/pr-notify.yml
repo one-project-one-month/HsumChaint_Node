@@ -3,7 +3,7 @@ name: PR Notify
 on:
   pull_request_target:
     types: [opened, closed, synchronize]
-    branches: [main, staging, develop]
+    branches: [main, develop]
 
 jobs:
   pr-opened:

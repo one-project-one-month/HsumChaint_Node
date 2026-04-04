@@ -17,7 +17,7 @@ pre-push:
       run: |
         branch=$(git rev-parse --abbrev-ref HEAD)
 
-        if echo "$branch" | grep -qE '^(main|staging|develop)$'; then
+        if echo "$branch" | grep -qE '^(main|develop)$'; then
           exit 0
         fi
 
@@ -29,7 +29,7 @@ pre-push:
           echo "   fix/bug-name"
           echo "   chore/update-deps"
           echo "   hotfix/bug-name"
-          echo "   develop, staging, main"
+          echo "   develop, main"
           exit 1
         fi
     tests:

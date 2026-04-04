@@ -3,7 +3,7 @@ name: Branch Policy
 on:
   pull_request_target:
     types: [opened, reopened, synchronize]
-    branches: [main, staging, develop]
+    branches: [main, develop]
 
 jobs:
   check-pr-target:
@@ -31,14 +31,8 @@ jobs:
           fi
 
           # 3. internal develop flow
-          if [ "$head" = "develop" ] && [ "$base" != "staging" ]; then
-            echo "❌ develop must target staging"
-            exit 1
-          fi
-
-          # 4. internal staging flow
-          if [ "$head" = "staging" ] && [ "$base" != "main" ]; then
-            echo "❌ staging must target main"
+          if [ "$head" = "develop" ] && [ "$base" != "main" ]; then
+            echo "❌ develop must target main"
             exit 1
           fi
 

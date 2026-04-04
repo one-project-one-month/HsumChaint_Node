@@ -3,7 +3,7 @@ name: PR Title Check
 on:
   pull_request:
     types: [opened, edited, synchronize, reopened]
-    branches: [main, staging, develop]
+    branches: [main, develop]
 
 jobs:
   check-title:
