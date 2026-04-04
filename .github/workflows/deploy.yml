@@ -41,6 +41,7 @@ jobs:
           host: ${{ secrets.DO_HOST }}
           username: ${{ secrets.DO_USER }}
           key: ${{ secrets.DO_SSH_KEY }}
+          passphrase: ${{ secrets.DO_SSH_PASSPHRASE }}
           envs: MYSQL_ROOT_PASSWORD,REDIS_PASSWORD,DB_NAME
           script: |
             PROJECT_DIR="~/app-${{ github.ref_name }}"
