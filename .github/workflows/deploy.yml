@@ -9,6 +9,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Set repo name to lowercase
+        id: repo
+        run: echo "name=${GITHUB_REPOSITORY,,}" >> $GITHUB_OUTPUT
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
       - name: Login to GHCR
@@ -23,7 +26,9 @@ jobs:
           context: .
           file: ./docker/${{ github.ref_name == 'main' && 'production' || 'develop' }}.Dockerfile
           push: true
-          tags: ghcr.io/${{ github.repository }}:${{ github.ref_name }}
+          tags: ghcr.io/${{ steps.repo.outputs.name }}:${{ github.ref_name }}
+    outputs:
+      repo_name: ${{ steps.repo.outputs.name }}
 
   deploy:
     needs: build-and-push
@@ -43,7 +48,7 @@ jobs:
 
             # Set up .env
             cat <<EOF > .env
-            IMAGE_NAME=ghcr.io/${{ github.repository }}:${{ github.ref_name }}
+            IMAGE_NAME=ghcr.io/${{ needs.build-and-push.outputs.repo_name }}:${{ github.ref_name }}
             MYSQL_ROOT_PASSWORD=$MYSQL_ROOT_PASSWORD
             REDIS_PASSWORD=$REDIS_PASSWORD
             DB_NAME=$DB_NAME
