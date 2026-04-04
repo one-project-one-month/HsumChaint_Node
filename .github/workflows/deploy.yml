@@ -66,5 +66,6 @@ jobs:
             docker compose pull
             docker compose up -d --remove-orphans
 
-            # Database Migration (Run once on app_1)
-            docker compose exec -T app_1 bunx prisma migrate deploy
+            # Database Migration
+            APP_SERVICE=${{ github.ref_name == 'main' && 'app_1' || 'app' }}
+            docker compose exec -T $APP_SERVICE bunx prisma migrate deploy
