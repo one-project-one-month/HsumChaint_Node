@@ -92,10 +92,12 @@ jobs:
             APP_CONTAINER=${{ github.ref_name == 'main' && 'hsumchaint_node_production' || 'hsumchaint_node_develop' }}
             rm -rf $PROJECT_DIR/prisma
             docker cp $APP_CONTAINER:/app/prisma $PROJECT_DIR/prisma
+            curl -L https://raw.githubusercontent.com/${{ github.repository }}/${{ github.ref_name }}/prisma.config.ts -o $PROJECT_DIR/prisma.config.ts
             ls $PROJECT_DIR/prisma/
             docker run --rm \
               --network app-${{ github.ref_name }}_app-network \
               --env-file $PROJECT_DIR/.env \
               -v $PROJECT_DIR/prisma:/app/prisma \
+              -v $PROJECT_DIR/prisma.config.ts:/app/prisma.config.ts \
               -w /app \
-              oven/bun:1.3.10 sh -c "bunx prisma migrate deploy --schema ./prisma/schema.prisma"
+              oven/bun:1.3.10 sh -c "bun add dotenv && bunx prisma migrate deploy"
