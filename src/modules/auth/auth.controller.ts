@@ -1,8 +1,20 @@
 import { AppError } from '@/utils/AppError';
 import { successResponse } from '@/utils/response';
 import type { NextFunction, Request, Response } from 'express';
-import type { LoginInput, RegisterInput } from './auth.schema';
-import { loginUser, logoutUser, refreshTokenService, registerUser } from './auth.service';
+import type {
+  LoginInput,
+  RegisterInput,
+  forgotPasswordInput,
+  resetPasswordInput,
+} from './auth.schema';
+import {
+  forgotPasswordService,
+  loginUser,
+  logoutUser,
+  refreshTokenService,
+  registerUser,
+  resetPasswordService,
+} from './auth.service';
 export const register = async (
   req: Request<unknown, unknown, RegisterInput>,
   res: Response,
@@ -10,6 +22,14 @@ export const register = async (
 ) => {
   try {
     const result = await registerUser(req.body);
+    //set refresh token in cookie
+    res.cookie('refreshToken', result.refreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 30 * 24 * 60 * 60 * 1000,
+    });
+    res.setHeader('Authorization', `Bearer ${result.accessToken}`);
     return successResponse(res, result, 'Register successful');
   } catch (error) {
     next(error);
@@ -68,6 +88,30 @@ export const logout = async (req: Request, res: Response, next: NextFunction) =>
       sameSite: 'lax',
     });
     return successResponse(res, null, 'Logout successfully');
+  } catch (error) {
+    next(error);
+  }
+};
+export const forgotPassword = async (
+  req: Request<unknown, unknown, forgotPasswordInput>,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const result = await forgotPasswordService(req.body.phone);
+    return successResponse(res, result, 'Reset Token generated successfully');
+  } catch (error) {
+    next(error);
+  }
+};
+export const resetPassword = async (
+  req: Request<unknown, unknown, resetPasswordInput>,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const result = await resetPasswordService(req.body);
+    return successResponse(res, result, 'Password reset successfully');
   } catch (error) {
     next(error);
   }

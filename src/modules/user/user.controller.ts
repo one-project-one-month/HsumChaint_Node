@@ -13,7 +13,18 @@ export class UserController {
       next(err);
     }
   }
-
+  async getMe(req: Request, res: Response, next: NextFunction) {
+    try {
+      const userId = req.user.userId;
+      const user = await userService.getUserById(userId);
+      if (!user) {
+        throw new AppError('User not found', 404);
+      }
+      successResponse(res, user, 'Current user retrieved successfully');
+    } catch (err) {
+      next(err);
+    }
+  }
   async getUserById(req: Request, res: Response, next: NextFunction) {
     try {
       const { id } = req.params;

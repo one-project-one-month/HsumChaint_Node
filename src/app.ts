@@ -1,3 +1,4 @@
+import cookieParser from 'cookie-parser';
 import cors from 'cors';
 import express, { type ErrorRequestHandler } from 'express';
 import { rateLimit } from 'express-rate-limit';
@@ -10,7 +11,6 @@ import { httpLogger } from './middlewares/httpLogger';
 import authRoutes from './modules/auth/auth.routes';
 import { userRouter } from './modules/user/user.routes';
 import { errorResponse, successResponse } from './utils/response';
-import cookieParser from 'cookie-parser';
 const app = express();
 
 // Telescope-like HTML Dashboard (Available at /stats)

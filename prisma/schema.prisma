@@ -14,11 +14,15 @@ model User {
   email        String?  @unique
   password     String
   userType     UserType @map("user_type")
+  contactPhone String? 
+  monkProfile  MonkProfile?
   fcmToken     String?  @map("fcm_token")
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
   isDeleted    Boolean  @default(false) @map("is_deleted")
   refreshToken RefreshToken[]
+  resetToken   PasswordResetToken[]
+  @@index([contactPhone])
   @@map("users")
 }
 
@@ -34,6 +38,23 @@ model RefreshToken {
   createdAt     DateTime  @default(now()) @map("created_at")
   revokedAt     DateTime?  @map("revoked_at")
   user          User @relation(fields: [userId], references: [id], onDelete: Cascade)
-  @@index([refreshToken, revokedAt])
+  @@index([refreshToken, userId, revokedAt])
   @@map("refresh_tokens")
+}
+model MonkProfile {
+  id               Int  @id @default (autoincrement())
+  userId           Int  @unique @map("user_id") 
+  monasteryName    String @map("monastery_name")
+  monasteryAddress String @map("monastery_address")
+  user             User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@map("monk_profile")
+}
+model PasswordResetToken {
+  id          Int       @id @default (autoincrement())
+  userId      Int       @map("user_id")
+  resetToken  String    @unique @map("reset_token")
+  expiresAt   DateTime  @map("expires_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  user        User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@map("password_reset_tokens")
 }
