@@ -30,12 +30,12 @@ jobs:
     runs-on: ubuntu-latest
     environment: ${{ github.ref_name == 'main' || 'develop' }}
     steps:
-      - name: Deploy to Vultr via SSH
+      - name: Deploy to DigitalOcean via SSH
         uses: appleboy/ssh-action@v1.0.3
         with:
-          host: ${{ secrets.VULTR_HOST }}
-          username: ${{ secrets.VULTR_USER }}
-          key: ${{ secrets.VULTR_SSH_KEY }}
+          host: ${{ secrets.DO_HOST }}
+          username: ${{ secrets.DO_USER }}
+          key: ${{ secrets.DO_SSH_KEY }}
           envs: MYSQL_ROOT_PASSWORD,REDIS_PASSWORD,DB_NAME
           script: |
             PROJECT_DIR="~/app-${{ github.ref_name }}"
