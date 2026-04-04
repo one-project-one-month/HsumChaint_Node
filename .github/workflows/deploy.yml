@@ -41,12 +41,18 @@ jobs:
           MYSQL_ROOT_PASSWORD: ${{ secrets.MYSQL_ROOT_PASSWORD }}
           REDIS_PASSWORD: ${{ secrets.REDIS_PASSWORD }}
           DB_NAME: ${{ secrets.DB_NAME }}
+          MYSQL_USER: ${{ secrets.MYSQL_USER }}
+          MYSQL_PASSWORD: ${{ secrets.MYSQL_PASSWORD }}
+          JWT_ACCESS_TOKEN_SECRET: ${{ secrets.JWT_ACCESS_TOKEN_SECRET }}
+          JWT_ACCESS_TOKEN_EXPIRES_IN: ${{ secrets.JWT_ACCESS_TOKEN_EXPIRES_IN }}
+          JWT_REFRESH_TOKEN_SECRET: ${{ secrets.JWT_REFRESH_TOKEN_SECRET }}
+          JWT_REFRESH_TOKEN_EXPIRES_IN: ${{ secrets.JWT_REFRESH_TOKEN_EXPIRES_IN }}
         with:
           host: ${{ secrets.DO_HOST }}
           username: ${{ secrets.DO_USER }}
           key: ${{ secrets.DO_SSH_KEY }}
           passphrase: ${{ secrets.DO_SSH_PASSPHRASE }}
-          envs: MYSQL_ROOT_PASSWORD,REDIS_PASSWORD,DB_NAME
+          envs: MYSQL_ROOT_PASSWORD,REDIS_PASSWORD,DB_NAME,MYSQL_USER,MYSQL_PASSWORD,JWT_ACCESS_TOKEN_SECRET,JWT_ACCESS_TOKEN_EXPIRES_IN,JWT_REFRESH_TOKEN_SECRET,JWT_REFRESH_TOKEN_EXPIRES_IN
           script: |
             PROJECT_DIR="$HOME/app-${{ github.ref_name }}"
             mkdir -p $PROJECT_DIR && cd $PROJECT_DIR
@@ -54,9 +60,21 @@ jobs:
             # Set up .env
             cat <<EOF > .env
             IMAGE_NAME=ghcr.io/${{ needs.build-and-push.outputs.repo_name }}:${{ github.ref_name }}
+            NODE_ENV=development
+            PORT=3000
             MYSQL_ROOT_PASSWORD=$MYSQL_ROOT_PASSWORD
+            MYSQL_HOST=mysql
+            MYSQL_USER=$MYSQL_USER
+            MYSQL_PASSWORD=$MYSQL_PASSWORD
+            MYSQL_DATABASE=$DB_NAME
+            DATABASE_URL=mysql://$MYSQL_USER:$MYSQL_PASSWORD@mysql:3306/$DB_NAME
             REDIS_PASSWORD=$REDIS_PASSWORD
+            REDIS_URL=redis://:$REDIS_PASSWORD@redis:6379
             DB_NAME=$DB_NAME
+            JWT_ACCESS_TOKEN_SECRET=$JWT_ACCESS_TOKEN_SECRET
+            JWT_ACCESS_TOKEN_EXPIRES_IN=$JWT_ACCESS_TOKEN_EXPIRES_IN
+            JWT_REFRESH_TOKEN_SECRET=$JWT_REFRESH_TOKEN_SECRET
+            JWT_REFRESH_TOKEN_EXPIRES_IN=$JWT_REFRESH_TOKEN_EXPIRES_IN
             EOF
 
             # Login and Pull

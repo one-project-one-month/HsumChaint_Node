@@ -5,10 +5,8 @@ services:
     restart: unless-stopped
     ports:
       - "8081:3000" # Direct access for develop
-    environment:
-      - NODE_ENV=development
-      - DATABASE_URL=mysql://root:${MYSQL_ROOT_PASSWORD}@mysql:3306/${DB_NAME}
-      - REDIS_PASSWORD=${REDIS_PASSWORD}
+    env_file:
+      - .env
     depends_on:
       mysql:
         condition: service_healthy
