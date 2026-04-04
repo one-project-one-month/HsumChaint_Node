@@ -6,7 +6,7 @@ COPY package.json bun.lock* ./
 RUN bun install --frozen-lockfile
 
 COPY . .
-RUN bunx prisma generate
+RUN DATABASE_URL="mysql://dummy:dummy@localhost:3306/dummy" bunx prisma generate
 RUN bun run build
 
 # Stage 2: Run stage
