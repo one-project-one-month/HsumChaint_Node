@@ -100,5 +100,6 @@ jobs:
               --env-file $PROJECT_DIR/migration.env \
               -v $PROJECT_DIR/prisma:/app/prisma \
               -v $PROJECT_DIR/prisma.config.ts:/app/prisma.config.ts \
+              -v $PROJECT_DIR/migration.env:/app/.env \
               -w /app \
               oven/bun:1.3.10 sh -c "bun add dotenv prisma && bunx prisma migrate deploy"
