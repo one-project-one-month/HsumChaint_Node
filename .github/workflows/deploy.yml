@@ -60,7 +60,7 @@ jobs:
             # Set up .env
             cat <<EOF > .env
             IMAGE_NAME=ghcr.io/${{ needs.build-and-push.outputs.repo_name }}:${{ github.ref_name }}
-            NODE_ENV=development
+            NODE_ENV=${{ github.ref_name == 'main' && 'production' || 'development' }}
             PORT=3000
             MYSQL_ROOT_PASSWORD=$MYSQL_ROOT_PASSWORD
             MYSQL_HOST=mysql
