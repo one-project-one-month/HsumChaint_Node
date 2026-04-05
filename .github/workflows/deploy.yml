@@ -93,11 +93,11 @@ jobs:
             rm -rf $PROJECT_DIR/prisma
             docker cp $APP_CONTAINER:/app/prisma $PROJECT_DIR/prisma
             curl -L https://raw.githubusercontent.com/${{ github.repository }}/${{ github.ref_name }}/prisma.config.ts -o $PROJECT_DIR/prisma.config.ts
-            ls $PROJECT_DIR/prisma/
+            printf 'DATABASE_URL=mysql://root:%s@mysql:3306/%s\n' "$MYSQL_ROOT_PASSWORD" "$DB_NAME" > $PROJECT_DIR/migration.env
+            cat $PROJECT_DIR/migration.env
             docker run --rm \
               --network app-${{ github.ref_name }}_app-network \
-              --env-file $PROJECT_DIR/.env \
-              -e DATABASE_URL="mysql://root:$MYSQL_ROOT_PASSWORD@mysql:3306/$DB_NAME" \
+              --env-file $PROJECT_DIR/migration.env \
               -v $PROJECT_DIR/prisma:/app/prisma \
               -v $PROJECT_DIR/prisma.config.ts:/app/prisma.config.ts \
               -w /app \
