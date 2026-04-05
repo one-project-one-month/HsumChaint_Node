@@ -20,6 +20,7 @@ services:
     container_name: hsumchaint_db_develop
     environment:
       - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
+      - MYSQL_ROOT_HOST=%
       - MYSQL_DATABASE=${DB_NAME}
     volumes:
       - hsumchaint_db_develop:/var/lib/mysql
