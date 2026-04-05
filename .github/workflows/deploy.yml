@@ -106,35 +106,18 @@ jobs:
 
   notify:
     needs: [build-and-push, deploy]
-    runs-on: ubuntu-latest
     if: always()
-    environment: ${{ github.ref_name == 'main' && 'production' || 'development' }}
-    steps:
-      - name: Set API URL
-        id: api
-        run: |
-          if [ "${{ github.ref_name }}" = "main" ]; then
-            echo "url=http://${{ secrets.DO_HOST }}:8082" >> $GITHUB_OUTPUT
-            echo "env=Production" >> $GITHUB_OUTPUT
-          else
-            echo "url=http://${{ secrets.DO_HOST }}:8081" >> $GITHUB_OUTPUT
-            echo "env=Development" >> $GITHUB_OUTPUT
-          fi
+    uses: ./.github/workflows/reusable-telegram.yml
+    with:
+      message: |
+        ${{ needs.deploy.result == 'success' && '✅' || '❌' }} <b>Deploy ${{ needs.deploy.result == 'success' && 'Successful' || 'Failed' }}</b>
 
-      - name: Send Telegram Notification
-        uses: appleboy/telegram-action@master
-        with:
-          to: ${{ secrets.TELEGRAM_CHAT_ID }}
-          token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          format: markdown
-          message: |
-            ${{ needs.deploy.result == 'success' && '✅' || '❌' }} *Deploy ${{ needs.deploy.result == 'success' && 'Successful' || 'Failed' }}*
+        📦 <b>Project:</b> HsumChaint Node
+        🌿 <b>Branch:</b> <code>${{ github.ref_name }}</code>
+        🏷️ <b>Environment:</b> ${{ github.ref_name == 'main' && 'Production' || 'Development' }}
+        👤 <b>Actor:</b> ${{ github.actor }}
+        💬 <b>Commit:</b> <code>${{ github.event.head_commit.message }}</code>
 
-            📦 *Project:* HsumChaint Node
-            🌿 *Branch:* `${{ github.ref_name }}`
-            🏷️ *Environment:* ${{ steps.api.outputs.env }}
-            👤 *Actor:* ${{ github.actor }}
-            💬 *Commit:* `${{ github.event.head_commit.message }}`
-
-            🔗 *API URL:* ${{ steps.api.outputs.url }}
-            📋 *Workflow:* [View Logs](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+        🔗 <b>API URL:</b> https://hsum-chaint-node-api.invisigate.asia/
+        📋 <a href="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}">View Logs</a>
+    secrets: inherit
