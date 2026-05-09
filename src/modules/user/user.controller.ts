@@ -1,6 +1,5 @@
 import type { NextFunction, Request, Response } from 'express';
 import { generatePaginationData } from '@/helper/paginationHelper';
-import { AppError } from '@/utils/AppError';
 import { successResponse } from '@/utils/response';
 import { uploadToR2 } from '@/utils/s3Storage';
 import type { getAllUsersInput, idParamsInput, updateUserBodyInput } from './user.schema';
@@ -12,38 +11,24 @@ import {
   updateUserService,
 } from './user.service';
 
-/**
- * Helper to extract and cast pagination without 'any'
- */
-const getPaginationParams = (query: Request['query']) => {
-  return {
-    page: Math.max(1, Number(query.page) || 1),
-    limit: Math.max(1, Number(query.limit) || 10),
-  };
-};
-
-export const getAllUsers = async (
-  // 1. Params: Record<string, never> (none expected)
-  // 2. ResBody: unknown
-  // 3. ReqBody: unknown
-  // 4. Query: getAllUsersInput
-  req: Request<Record<string, never>, unknown, unknown, getAllUsersInput>,
-  res: Response,
-  next: NextFunction
-) => {
+export const getAllUsers = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { page, limit } = getPaginationParams(req.query);
+    const rawQuery = req.query as Record<string, string>;
+    const page = Number(rawQuery.page) || 1;
+    const limit = Number(rawQuery.limit) || 10;
 
+    // Create a clean object for the service
     const queryData: getAllUsersInput = {
-      ...req.query,
+      ...rawQuery,
       page,
       limit,
     };
-
     const { users, totals } = await getAllUserService(queryData);
+
+    // 4. Generate pagination
     const paginationData = generatePaginationData(req, totals, page, limit);
 
-    return successResponse(res, { users, paginationData }, 'All Users Retrieved Successfully');
+    return successResponse(res, { users, paginationData }, 'All Users are Retrieved Successfully');
   } catch (err) {
     next(err);
   }
@@ -51,40 +36,28 @@ export const getAllUsers = async (
 
 export const getMe = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const userId = req.user?.userId;
-
-    if (!userId) {
-      throw new AppError('Authentication required', 401);
-    }
-
-    const user = await getMeService(userId);
-    successResponse(res, user, 'Current user retrieved successfully');
+    const userId = req.user.userId;
+    const result = await getMeService(userId);
+    return successResponse(res, result, 'Current user retrieved successfully');
   } catch (err) {
     next(err);
   }
 };
 
-export const getUserById = async (
-  req: Request<idParamsInput, unknown, unknown, unknown>,
-  res: Response,
-  next: NextFunction
-) => {
+export const getUserById = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const user = await getUserByIdService(req.params);
-    successResponse(res, user, 'User retrieved successfully');
+    const params = req.params as unknown as idParamsInput;
+    const result = await getUserByIdService(params);
+    return successResponse(res, result, 'User retrieved successfully');
   } catch (err) {
     next(err);
   }
 };
 
-export const updateUser = async (
-  req: Request<idParamsInput, unknown, updateUserBodyInput, unknown>,
-  res: Response,
-  next: NextFunction
-) => {
+export const updateUser = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { id } = req.params;
-    const body = req.body;
+    const { id } = req.params as unknown as idParamsInput;
+    const body = req.body as updateUserBodyInput;
 
     if (req.file) {
       const avatarUrl = await uploadToR2(req.file.buffer, req.file.originalname, req.file.mimetype);
@@ -98,13 +71,10 @@ export const updateUser = async (
   }
 };
 
-export const deleteUser = async (
-  req: Request<idParamsInput, unknown, unknown, unknown>,
-  res: Response,
-  next: NextFunction
-) => {
+export const deleteUser = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const deletedUser = await softDeleteUserService(req.params);
+    const params = req.params as unknown as idParamsInput;
+    const deletedUser = await softDeleteUserService(params);
     const { id, username } = deletedUser;
 
     return successResponse(

@@ -1,6 +1,6 @@
-import type { Prisma } from '@prisma/client';
 import type { Request } from 'express';
-import { generatePaginationData } from '../../Helper/paginationHelper';
+import type { Prisma } from 'prisma-client';
+import { generatePaginationData } from '@/helper/paginationHelper';
 import type { PaginationQueryType } from '../../helper/paginationSchema';
 import { prisma } from '../../lib/prisma';
 import { BadRequestError } from '../../utils/BadRequestError';

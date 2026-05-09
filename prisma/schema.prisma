@@ -14,12 +14,12 @@ model User {
   email        String?              @unique
   password     String
   userType     UserType             @map("user_type")
-  contactPhone String?
-  avatar       String?
   fcmToken     String?              @map("fcm_token")
   createdAt    DateTime             @default(now()) @map("created_at")
   updatedAt    DateTime             @updatedAt @map("updated_at")
   isDeleted    Boolean              @default(false) @map("is_deleted")
+  contactPhone String?
+  avatar       String?
   monkProfile  MonkProfile?
   resetToken   PasswordResetToken[]
   refreshToken RefreshToken[]

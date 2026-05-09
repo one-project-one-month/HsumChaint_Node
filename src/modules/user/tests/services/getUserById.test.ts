@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, mock, spyOn } from 'bun:test';
-import type { User } from 'prisma-client';
+import { type User, UserType } from 'prisma-client';
 import { prisma } from '@/lib/prisma';
 import { getUserByIdService } from '../../user.service';
 
@@ -18,12 +18,22 @@ import { getUserByIdService } from '../../user.service';
  *  3. Each test sets its own fake return value to simulate a specific DB state
  *     (found user, null, soft-deleted, etc.) — no seed/cleanup needed at all.
  */
+
+// Mock Redis BEFORE any service imports resolve
+// Without this, the service hits the real Redis in Docker and returns
+// cached data, making it impossible to test the DB fallback path.
+mock.module('@/lib/redis', () => ({
+  redis: {
+    get: mock(() => Promise.resolve(null)), // simulate cache miss every time
+    set: mock(() => Promise.resolve('OK')),
+    del: mock(() => Promise.resolve(1)),
+  },
+}));
 mock.module('@/lib/prisma', () => ({
   prisma: {
     user: {
       // Placeholder — spyOn below will override the return value per test
       findFirst: mock(() => Promise.resolve(null)),
-      findUnique: mock(() => Promise.resolve(null)),
     },
   },
 }));
@@ -32,24 +42,18 @@ mock.module('@/lib/prisma', () => ({
 // This gives us mockResolvedValue() and call-assertion abilities per test.
 const findFirstMock = spyOn(prisma.user, 'findFirst');
 
-const findUniqueMock = spyOn(prisma.user, 'findUnique');
-
 /**
  * Shared mock data — mirrors what the real DB would return.
  * Donor has no monkProfile (null), Monk has a nested monkProfile object.
  * We reuse these across tests instead of seeding/cleaning a real DB.
  */
 
-enum UserType {
-  Monk = 'Monk',
-  Donor = 'Donor',
-}
 const mockDonor = {
   id: 1,
   phone: '09111111111',
   username: 'test_donor',
   email: 'donor@test.com',
-  userType: UserType.Donor,
+  userType: UserType.Monk,
   isDeleted: false,
   monkProfile: null, // Donors never have a monkProfile
 };
@@ -72,7 +76,6 @@ describe('getUserByIdService Unit Test (Mocking)', () => {
   // Without this, a mockResolvedValue() from one test could affect the next.
   beforeEach(() => {
     findFirstMock.mockClear();
-    findUniqueMock.mockClear();
   });
 
   // Happy path for Monks: verifies the service returns the user AND
@@ -103,22 +106,17 @@ describe('getUserByIdService Unit Test (Mocking)', () => {
   // Prisma returns null for findUnique when no record matches —
   // the service should pass that null through rather than throw.
   it('should throw error for non-existent ID', async () => {
-    findFirstMock.mockResolvedValue(null);
-    findUniqueMock.mockResolvedValue(null);
+    findFirstMock.mockResolvedValue(null); // fake: DB found nothing
 
     await expect(getUserByIdService({ id: 99999 })).rejects.toThrow('User is not found');
   });
+  // Soft-delete behavior: instead of actually updating a DB row like the
+  // integration test did, we simply mock findUnique to return null —
+  // simulating what the service's `where: { isDeleted: false }` clause
+  // would produce when the user is soft-deleted.
+  it('should return null if the user is soft-deleted (isDeleted: true)', async () => {
+    findFirstMock.mockResolvedValue(null); // fake: service filters out deleted users
 
-  it('should throw error if user is soft-deleted', async () => {
-    findFirstMock.mockResolvedValue(null);
-
-    const softDeletedUser = {
-      ...mockDonor,
-      isDeleted: true,
-    };
-
-    findUniqueMock.mockResolvedValue(softDeletedUser);
-
-    await expect(getUserByIdService({ id: 1 })).rejects.toThrow('User is not found');
+    await expect(getUserByIdService({ id: mockDonor.id })).rejects.toThrow('User is not found');
   });
 });

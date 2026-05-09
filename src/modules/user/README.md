@@ -6,6 +6,7 @@ This module handles **User Management** for the Hsum Chaint application, includi
 - Advanced filtering
 - Secure profile updates
 - Avatar upload using Cloudflare R2
+- Redis caching for high-performance data access
 
 ---
 
@@ -58,6 +59,72 @@ Only users with `userType = Monk` can update:
 
 - monasteryName  
 - monasteryAddress  
+
+---
+## Caching Strategy (Redis)
+
+This module uses Redis to reduce database load and improve response times
+for frequently accessed data.
+
+---
+
+### Cache Keys
+
+| Key Pattern                        | TTL      | Contains                        |
+|------------------------------------|----------|---------------------------------|
+| `user:{id}:profile`                | 1 hour   | Full user profile + monkProfile |
+| `users:list:{fingerprint}`         | 10 mins  | Paginated user list + total     |
+
+The `{fingerprint}` is a deterministic JSON hash of the request filters and
+pagination params. Keys are sorted before hashing to ensure identical queries
+always produce the same cache key regardless of field insertion order.
+
+---
+
+### Cache Lifecycle
+
+#### Profile Cache (`user:{id}:profile`)
+SET  → getUserById, getMe (on DB miss)
+DEL  → updateUser, softDelete
+#### List Cache (`users:list:*`)
+SET  → getAllUsers (on DB miss)
+DEL  → updateUser, softDelete (via SCAN pattern delete)
+List cache uses a non-blocking `SCAN` loop instead of storing a master key
+list. This keeps Redis responsive under load and avoids managing a secondary
+index.
+
+---
+
+### Cache Invalidation Rules
+
+| Operation      | Profile Cache         | List Cache              |
+|----------------|-----------------------|-------------------------|
+| `updateUser`   | DEL `user:{id}:profile` | SCAN DEL `users:list:*` |
+| `softDelete`   | DEL `user:{id}:profile` | SCAN DEL `users:list:*` |
+| `getUserById`  | SET on miss           | —                       |
+| `getMe`        | SET on miss           | —                       |
+| `getAllUsers`   | —                     | SET on miss             |
+
+---
+
+### Cache Failure Behaviour
+
+All Redis operations are wrapped in `try/catch`. If Redis is unavailable:
+- Read operations fall through to the database
+- Write operations log the error and continue
+- The app **never crashes** due to a cache failure
+
+This means caching is a **performance layer only** — correctness always
+comes from the database.
+
+---
+
+### Why 10 Minutes for Lists and 1 Hour for Profiles?
+
+- **Lists** change frequently — any create, update, or delete invalidates
+  them. A short TTL limits stale window if invalidation is missed.
+- **Profiles** are stable between explicit updates. A longer TTL means
+  fewer DB reads for `GET /me` and `GET /users/:id` across active sessions.
 
 ---
 
@@ -154,6 +221,9 @@ isDeleted = true
 - Middleware-driven validation
 - External service abstraction (R2)
 - Testable components
+- External service abstraction (R2)
+- Cache-aside pattern (Redis)
+- Graceful cache degradation
 
 ---
 
@@ -172,11 +242,11 @@ bun install
 Create a `.env` file:
 
 
-DATABASE_URL= \
-R2_ENDPOINT= \
-R2_ACCESS_KEY_ID= \
-R2_SECRET_ACCESS_KEY= \
-R2_BUCKET_NAME= \
+DATABASE_URL= 
+R2_ENDPOINT= 
+R2_ACCESS_KEY_ID= 
+R2_SECRET_ACCESS_KEY= 
+R2_BUCKET_NAME= 
 R2_PUBLIC_URL= 
 
 
@@ -190,4 +260,6 @@ This module demonstrates real-world backend engineering skills:
 - Secure authentication patterns
 - Cloud storage integration (R2)
 - Database modeling and querying
+- Production-level caching strategy (Redis)
+- Cache invalidation and consistency patterns
 - Production-level testing strategy

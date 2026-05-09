@@ -3,6 +3,8 @@ import jwt from 'jsonwebtoken';
 import type { Prisma } from 'prisma-client';
 import { env } from '@/config/env';
 import { createAuthSession } from '@/helper/createAuthSession';
+import { redis } from '@/lib/redis';
+import { clearUserListCache } from '@/utils/cache.util';
 import type { TokenPayload } from '@/utils/jwt';
 import { prisma } from '../../lib/prisma';
 import { AppError } from '../../utils/AppError';
@@ -40,6 +42,7 @@ export const registerUser = async (data: RegisterInput) => {
         password: hashedPassword,
         userType: data.userType,
         contactPhone: data.contactPhone,
+        avatar: data.avatar,
       },
       select: {
         id: true,
@@ -49,6 +52,7 @@ export const registerUser = async (data: RegisterInput) => {
         userType: true,
         createdAt: true,
         contactPhone: true,
+        avatar: true,
       },
     });
     let monkProfile = null;
@@ -69,6 +73,19 @@ export const registerUser = async (data: RegisterInput) => {
     const { accessToken, refreshToken } = await createAuthSession(tx, user.id, user.userType);
     return { accessToken, refreshToken, user, monkProfile };
   });
+  // Warm the /me cache immediately after register —
+  // user is auto-logged in, their next request will be GET /me
+  const profileData = {
+    ...result.user,
+    monkProfile: result.user.userType === 'Monk' ? result.monkProfile : null,
+  };
+  try {
+    await redis.set(`user:${result.user.id}:profile`, JSON.stringify(profileData), 'EX', 3600);
+  } catch (error) {
+    console.error('Redis Set Register Cache Error:', error);
+    // Non-fatal — registration still succeeds
+  }
+  await clearUserListCache();
   return result;
 };
 //login
@@ -85,19 +102,29 @@ export const loginUser = async (data: LoginInput) => {
     throw new AppError('Invalid phone or password', 401);
   }
   const { accessToken, refreshToken } = await createAuthSession(prisma, user.id, user.userType);
+  // Warm the /me cache so the first authenticated request is free
+  const profileCacheKey = `user:${user.id}:profile`;
+  const profileData = {
+    id: user.id,
+    phone: user.phone,
+    username: user.username,
+    email: user.email,
+    userType: user.userType,
+    contactPhone: user.contactPhone,
+    avatar: user.avatar,
+    createdAt: user.createdAt,
+    //if the user is Monk, return the monkProfile
+    monkProfile: user.userType === 'Monk' ? user.monkProfile : null,
+  };
+  try {
+    await redis.set(profileCacheKey, JSON.stringify(profileData), 'EX', 3600);
+  } catch (error) {
+    console.error('Redis Set Login Cache Error:', error);
+  }
   return {
     accessToken,
     refreshToken,
-    user: {
-      id: user.id,
-      phone: user.phone,
-      username: user.username,
-      email: user.email,
-      userType: user.userType,
-      contactPhone: user.contactPhone,
-      //if the user is Monk, return the monkProfile
-      monkProfile: user.userType === 'Monk' ? user.monkProfile : null,
-    },
+    user: profileData,
   };
 };
 //refresh token
@@ -158,6 +185,12 @@ export const logoutUser = async (refreshToken: string) => {
     where: { id: token.id },
     data: { revokedAt: new Date() },
   });
+  // Clear their profile cache on logout
+  try {
+    await redis.del(`user:${payload.userId}:profile`);
+  } catch (error) {
+    console.error('Redis Del Logout Cache Error:', error);
+  }
   return { message: 'Logout successfully' };
 };
 //forgot password handle
@@ -198,4 +231,10 @@ export const resetPasswordService = async (result: resetPasswordInput) => {
       where: { id: resetToken.id },
     }),
   ]);
+  // Invalidate profile cache — security-sensitive change
+  try {
+    await redis.del(`user:${resetToken.userId}:profile`);
+  } catch (error) {
+    console.error('Redis Del Reset Cache Error:', error);
+  }
 };

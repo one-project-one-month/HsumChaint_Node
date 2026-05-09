@@ -24,6 +24,7 @@ export const registerSchema = z.object({
         .min(3, 'Username must be at least 3 characters'),
       email: z.string().trim().toLowerCase().email('Invalid email').optional(),
       contactPhone: phoneSchema.optional(),
+      avatar: z.string().optional(),
       password: passwordSchema,
       userType: z.enum(['Monk', 'Donor']),
       monasteryName: z.string().optional(),

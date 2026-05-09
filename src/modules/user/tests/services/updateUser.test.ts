@@ -1,12 +1,39 @@
 import { beforeEach, describe, expect, it, mock, spyOn } from 'bun:test';
 // 1. Import types from Prisma Client
-import type { MonkProfile, User } from '@prisma/client';
+import { type MonkProfile, type User, UserType } from 'prisma-client';
 import { prisma } from '@/lib/prisma';
 import { updateUserService } from '../../user.service';
 
 /**
- * UNIT TEST STRATEGY: Module Mocking with Strict Typing
+ * UNIT TEST STRATEGY: Module Mocking
+ *
+ * updateUserService is the most complex service we test because it touches
+ * THREE different systems that all need to be mocked:
+ *
+ *  1. prisma.user.findUnique — guard check: does the user exist?
+ *  2. prisma.user.update     — persists the changed fields to DB
+ *  3. Bun.password           — verify() checks old password, hash() hashes new one
+ *
+ * The service handles several distinct update scenarios in one function:
+ *  - Basic field updates (username, avatar, etc.)
+ *  - Nested relation updates (monkProfile.monasteryName)
+ *  - Password changes (requires old password verification before hashing new one)
+ *
+ * By mocking all three systems, each test can simulate a precise DB/auth state
+ * and assert only the behavior relevant to that scenario — no real DB or
+ * bcrypt hashing involved.
  */
+// Mock Redis BEFORE any service imports resolve
+// Without this, the service hits the real Redis in Docker and returns
+// cached data, making it impossible to test the DB fallback path.
+mock.module('@/lib/redis', () => ({
+  redis: {
+    get: mock(() => Promise.resolve(null)), // simulate cache miss every time
+    set: mock(() => Promise.resolve('OK')),
+    del: mock(() => Promise.resolve(1)),
+    scan: mock(() => Promise.resolve(['0', []])),
+  },
+}));
 mock.module('@/lib/prisma', () => ({
   prisma: {
     user: {
@@ -16,9 +43,12 @@ mock.module('@/lib/prisma', () => ({
   },
 }));
 
+// Prisma spies — control what "DB state" the service sees (findUnique)
+// and verify the exact payload sent back to the DB (update).
 const findUniqueMock = spyOn(prisma.user, 'findUnique');
 const updateMock = spyOn(prisma.user, 'update');
-
+// Bun.password spies — mock crypto so tests don't do real hashing.
+// verify() simulates checking the old password, hash() simulates hashing the new one.
 const passwordVerifyMock = spyOn(Bun.password, 'verify');
 const passwordHashMock = spyOn(Bun.password, 'hash');
 
@@ -26,6 +56,8 @@ const passwordHashMock = spyOn(Bun.password, 'hash');
 type UserWithProfile = User & { monkProfile: MonkProfile | null };
 
 describe('updateUserService Unit Test (Mocking)', () => {
+  // Clear all four mocks between tests — especially important here because
+  // passwordVerifyMock returning true/false in one test must not leak into another.
   beforeEach(() => {
     findUniqueMock.mockClear();
     updateMock.mockClear();
@@ -41,9 +73,12 @@ describe('updateUserService Unit Test (Mocking)', () => {
     id: 222,
     username: 'banana_monk',
     email: 'banana@test.com',
+    phone: '09123456789',
+    contactPhone: '09111111111',
     password: 'hashed_password_in_db',
-    userType: 'Monk',
+    userType: UserType.Monk,
     avatar: null,
+    fcmToken: null, // FIX: Added fcmToken because it's required in schema
     isDeleted: false,
     createdAt: new Date(),
     updatedAt: new Date(),
@@ -52,11 +87,8 @@ describe('updateUserService Unit Test (Mocking)', () => {
       userId: 222,
       monasteryName: 'Su Taung Pyae',
       monasteryAddress: 'somewhere',
-      createdAt: new Date(),
-      updatedAt: new Date(),
     },
   };
-
   it('should update basic user info correctly', async () => {
     // No more 'as any' — the mock matches the expected return type
     findUniqueMock.mockResolvedValue(mockUser);
@@ -81,10 +113,11 @@ describe('updateUserService Unit Test (Mocking)', () => {
       ? { ...mockUser.monkProfile, monasteryName: 'New Monastery' }
       : null;
 
+    // Explicitly cast the resolved value to satisfy the spy
     updateMock.mockResolvedValue({
       ...mockUser,
       monkProfile: updatedProfile,
-    });
+    } as UserWithProfile);
 
     const result = await updateUserService(222, {
       monasteryName: 'New Monastery',

@@ -1,6 +1,8 @@
-import type { Prisma } from '@prisma/client';
+import type { Prisma } from 'prisma-client';
 import { prisma } from '@/lib/prisma';
+import { redis } from '@/lib/redis';
 import { AppError } from '@/utils/AppError';
+import { buildListCacheKey, clearUserListCache } from '@/utils/cache.util';
 import type { getAllUsersInput, idParamsInput, updateUserBodyInput } from './user.schema';
 
 /**
@@ -18,9 +20,17 @@ export const selectUser = {
   avatar: true,
 } as const;
 
-// --- Query Services ---
+// --- Query Services using Redis ---
 
 export const getAllUserService = async (data: getAllUsersInput) => {
+  //create a unique fingerprint for specific search
+  const cacheKey = buildListCacheKey(data);
+  try {
+    const cachedData = await redis.get(cacheKey);
+    if (cachedData) return JSON.parse(cachedData);
+  } catch (error) {
+    console.error('Redis Get List Error', error);
+  }
   const {
     page,
     limit,
@@ -32,8 +42,8 @@ export const getAllUserService = async (data: getAllUsersInput) => {
     monasteryName,
     monasteryAddress,
   } = data;
-
   const skip = (page - 1) * limit;
+  //check the existing data
   const where: Prisma.UserWhereInput = { isDeleted: false };
 
   // Build filters
@@ -42,12 +52,12 @@ export const getAllUserService = async (data: getAllUsersInput) => {
   if (email) where.email = { contains: email };
   if (contactPhone) where.contactPhone = { startsWith: contactPhone };
   if (userType) where.userType = userType;
-
+  //create empty object to add both monastery address and monastery name
   // Build Monk Profile filters
   const monkProfileFilter: Prisma.MonkProfileWhereInput = {};
   if (monasteryAddress) monkProfileFilter.monasteryAddress = { startsWith: monasteryAddress };
   if (monasteryName) monkProfileFilter.monasteryName = { startsWith: monasteryName };
-
+  //after collect all data add into where object
   if (Object.keys(monkProfileFilter).length > 0) {
     where.monkProfile = { is: monkProfileFilter };
     // If filtering by monastery but no userType provided, default to Monk
@@ -65,33 +75,50 @@ export const getAllUserService = async (data: getAllUsersInput) => {
     }),
     prisma.user.count({ where }),
   ]);
-
-  return { users, totals };
+  const result = { users, totals };
+  //save the result to Redis
+  try {
+    //use shorter time (10mins / 600s) because lists change often
+    await redis.set(cacheKey, JSON.stringify(result), 'EX', 600);
+  } catch (error) {
+    console.error('Redis Set List Error', error);
+  }
+  return result;
 };
-
 /**
  * Reusable helper to fetch a single user with their monk profile.
  * Used by GetMe and GetUserById.
  */
 const getUserWithProfile = async (id: number) => {
-  console.log('Searching for User ID:', id); // Debug: Check the value and type
-
+  const cachedKey = `user:${id}:profile`;
+  try {
+    //First, try to get data from Redis
+    const cachedUser = await redis.get(cachedKey);
+    //when found, convert string back to object
+    if (cachedUser) {
+      try {
+        return JSON.parse(cachedUser);
+      } catch {
+        await redis.del(cachedKey); // cleanup bad cache
+      }
+    }
+  } catch (error) {
+    console.error('Redis Get Error:', error);
+  }
+  //if not found in cached, get from the database
   const user = await prisma.user.findFirst({
     where: { id, isDeleted: false },
     select: { ...selectUser, monkProfile: true },
   });
+  if (!user) throw new AppError('User is not found', 404);
+  //update cache background
 
-  if (!user) {
-    //Debug: Check if the user exists AT ALL (even if deleted)
-    const existsButDeleted = await prisma.user.findUnique({ where: { id } });
-    if (existsButDeleted) {
-      console.warn(`User ${id} exists but isDeleted is true.`);
-    } else {
-      console.warn(`User ${id} does not exist in the database.`);
-    }
-
-    throw new AppError('User is not found', 404);
+  try {
+    await redis.set(cachedKey, JSON.stringify(user), 'EX', 3600);
+  } catch (error) {
+    console.error('Redis Set Error:', error);
   }
+
   return user;
 };
 
@@ -126,26 +153,32 @@ export const updateUserService = async (id: number, data: updateUserBodyInput) =
     ...(data.contactPhone !== undefined && { contactPhone: data.contactPhone }),
     ...(data.avatar !== undefined && { avatar: data.avatar }),
   };
-
-  // 3. Build Nested Monk Profile Update
+  //build monk profile update separately because it belongs to a separate database
   const monkProfileData: Prisma.MonkProfileUpdateInput = {};
+  //collet only provide fields (partial update support)
   if (data.monasteryName !== undefined) monkProfileData.monasteryName = data.monasteryName;
   if (data.monasteryAddress !== undefined) monkProfileData.monasteryAddress = data.monasteryAddress;
+  // If at least one monastery field is provided, attach nested update
 
   if (Object.keys(monkProfileData).length > 0) {
+    // Business rule: only Monk users are allowed to update monastery info
     if (user.userType !== 'Monk') {
       throw new AppError('Only monks can update monastery info', 400);
     }
+    // Prisma nested update for related monkProfile table
     updateData.monkProfile = { update: monkProfileData };
   }
-
-  return prisma.user.update({
+  const updatedUser = await prisma.user.update({
     where: { id },
     data: updateData,
     select: { ...selectUser, monkProfile: true },
   });
+  //delete the old cache so the next "Get" fetches fresh data
+  await redis.del(`user:${id}:profile`); //clear specific profile
+  await clearUserListCache(); //clear all search lists
+  return updatedUser;
 };
-
+//delete user account with soft delete
 export const softDeleteUserService = async (data: idParamsInput) => {
   const { id } = data;
 
@@ -164,5 +197,8 @@ export const softDeleteUserService = async (data: idParamsInput) => {
     data: { isDeleted: true },
   });
 
+  //clear cache so a "deleted" user doesn't stay visible in the cache
+  await redis.del(`user:${id}:profile`); //clear specific profile
+  await clearUserListCache(); //clear all search lists
   return existingUser;
 };
