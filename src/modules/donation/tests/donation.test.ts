@@ -487,7 +487,7 @@ describe('C# compatible and space-scoped HTTP routes', () => {
     expect(
       (
         await request(f.app)
-          .put('/api/v1/donations/100/review')
+          .patch('/api/v1/donations/100/review')
           .set('x-test-user', '1')
           .send({ status: 3 })
       ).body.data.status
@@ -495,14 +495,14 @@ describe('C# compatible and space-scoped HTTP routes', () => {
     expect(
       (
         await request(f.app)
-          .put('/api/v1/donations/100/schedule')
+          .patch('/api/v1/donations/100/schedule')
           .set('x-test-user', '1')
           .send({ pickupTime: '2026-12-01T06:00:00Z' })
       ).body.data.status
     ).toBe(4);
     expect(
-      (await request(f.app).put('/api/v1/donations/100/complete').set('x-test-user', '1')).body.data
-        .status
+      (await request(f.app).patch('/api/v1/donations/100/complete').set('x-test-user', '1')).body
+        .data.status
     ).toBe(5);
   });
   test('manual, batch, recurring, cancellation and deletion routes', async () => {
@@ -514,7 +514,7 @@ describe('C# compatible and space-scoped HTTP routes', () => {
     expect(manual.status).toBe(201);
     expect(manual.body.data.donorId).toBeNull();
     expect(
-      (await request(f.app).put('/api/v1/donations/100/cancel').set('x-test-user', '1')).body.data
+      (await request(f.app).patch('/api/v1/donations/100/cancel').set('x-test-user', '1')).body.data
         .status
     ).toBe(7);
     expect(
@@ -668,10 +668,10 @@ describe('C# compatible and space-scoped HTTP routes', () => {
         )
     );
     expect(
-      (await request(f.app).put('/api/v1/donations/100/cancel').set('x-test-user', '2')).status
+      (await request(f.app).patch('/api/v1/donations/100/cancel').set('x-test-user', '2')).status
     ).toBe(403);
     expect(
-      (await request(f.app).put('/api/v1/spaces/10/donations/100/cancel').set('x-test-user', '3'))
+      (await request(f.app).patch('/api/v1/spaces/10/donations/100/cancel').set('x-test-user', '3'))
         .status
     ).toBe(403);
     expect(
@@ -680,7 +680,7 @@ describe('C# compatible and space-scoped HTTP routes', () => {
     ).toBe(403);
     f.grant(20, 'Donation.Cancel');
     expect(
-      (await request(f.app).put('/api/v1/spaces/10/donations/100/cancel').set('x-test-user', '3'))
+      (await request(f.app).patch('/api/v1/spaces/10/donations/100/cancel').set('x-test-user', '3'))
         .body.data.status
     ).toBe(7);
     f.grant(20, 'Donation.Delete');
@@ -698,15 +698,122 @@ describe('C# compatible and space-scoped HTTP routes', () => {
       (await request(f.app).delete('/api/v1/donations/100').set('x-test-user', '7')).status
     ).toBe(403);
     expect(
-      (await request(f.app).put('/api/v1/donations/100/complete').set('x-test-user', '7')).status
+      (await request(f.app).patch('/api/v1/donations/100/complete').set('x-test-user', '7')).status
     ).toBe(403);
     expect(
       (
         await request(f.app)
-          .put('/api/v1/donations/100/review')
+          .patch('/api/v1/donations/100/review')
           .set('x-test-user', '3')
           .send({ status: 3 })
       ).status
     ).toBe(403);
+  });
+  test('batch creation stamps title onto note and customDonationType', async () => {
+    const f = donationFixture(false);
+    const result = await f.service.batch(
+      1,
+      10,
+      [
+        { donationType: 0, donorName: 'U Ba', amount: '50000' },
+        { donationType: 0, donorName: 'Daw Mya', amount: '100000', note: 'Family fund' },
+      ],
+      'Brick Wall Construction'
+    );
+    expect(result).toHaveLength(2);
+    expect(result[0].note).toBe('[Batch: Brick Wall Construction]');
+    expect(result[0].customDonationType).toBe('Brick Wall Construction');
+    expect(result[1].note).toBe('[Batch: Brick Wall Construction] - Family fund');
+  });
+  test('recurring series can be approved or cancelled in a single call using seriesId', async () => {
+    const f = httpFixture();
+    const created = await request(f.app)
+      .post('/api/v1/donations/recurring/request')
+      .set('x-test-user', '2')
+      .send({
+        monasterySpaceId: 10,
+        donationType: 0,
+        amount: '10000',
+        monthsCount: 3,
+        dayOfMonth: 1,
+        startDate: '2026-11-01',
+      });
+    expect(created.status).toBe(201);
+    const seriesId = created.body.data[0].seriesId;
+    expect(seriesId).toBeTruthy();
+    expect(created.body.data[0].seriesIndex).toBe(1);
+    expect(created.body.data[0].seriesTotal).toBe(3);
+
+    // Monk reviews all 3 in 1 call
+    const reviewed = await request(f.app)
+      .patch(`/api/v1/donations/series/${seriesId}/review`)
+      .set('x-test-user', '1')
+      .send({ status: 3, note: 'Accepted all 3 months' });
+    expect(reviewed.status).toBe(200);
+    expect(reviewed.body.data).toHaveLength(3);
+    for (const item of reviewed.body.data) {
+      expect(item.status).toBe(3);
+      expect(item.seriesId).toBe(seriesId);
+    }
+
+    // Donor cancels the remaining series in 1 call
+    const cancelled = await request(f.app)
+      .patch(`/api/v1/donations/series/${seriesId}/cancel`)
+      .set('x-test-user', '2')
+      .send({ note: 'Relocating to another city' });
+    expect(cancelled.status).toBe(200);
+    for (const item of cancelled.body.data) {
+      expect(item.status).toBe(7);
+    }
+  });
+
+  test('Space Editor (spaceRoleId: 3) can create manual donations but cannot review, schedule or delete', async () => {
+    const f = httpFixture();
+    // User 5 is a member of monastery 10 with spaceRoleId: 3 (Space Editor)
+    f.tables.monasteryMember.push({
+      userId: 5,
+      monasterySpaceId: 10,
+      role: 3,
+      spaceRoleId: 3,
+      isOwner: false,
+    });
+    f.grant(3, 'Donation.Create');
+
+    // 1. Space Editor cannot review/accept donations
+    const reviewRes = await request(f.app)
+      .patch('/api/v1/donations/100/review')
+      .set('x-test-user', '5')
+      .send({ status: 3 });
+    expect(reviewRes.status).toBe(403);
+    expect(reviewRes.body.message).toContain('Donation.Review');
+
+    // 2. Space Editor cannot delete donations
+    const deleteRes = await request(f.app).delete('/api/v1/donations/100').set('x-test-user', '5');
+    expect(deleteRes.status).toBe(403);
+    expect(deleteRes.body.message).toContain('Donation.Delete');
+
+    // 3. Space Editor cannot schedule donations
+    const scheduleRes = await request(f.app)
+      .patch('/api/v1/donations/100/schedule')
+      .set('x-test-user', '5')
+      .send({ pickupTime: '2026-11-01T08:00:00Z' });
+    expect(scheduleRes.status).toBe(403);
+    expect(scheduleRes.body.message).toContain('Donation.Schedule');
+
+    // 4. Space Editor CAN create manual donations because they have Space.Donation.Create
+    const manualRes = await request(f.app)
+      .post('/api/v1/donations/manual')
+      .set('x-test-user', '5')
+      .send({ monasterySpaceId: 10, donationType: 0, amount: 5000, donorName: 'Test' });
+    expect(manualRes.status).toBe(201);
+    expect(Number(manualRes.body.data.amount)).toBe(5000);
+
+    // 5. Space Member (User 7: only Space.View, no Donation.Create) CANNOT create manual donations
+    const memberManualRes = await request(f.app)
+      .post('/api/v1/donations/manual')
+      .set('x-test-user', '7')
+      .send({ monasterySpaceId: 10, donationType: 0, amount: 5000, donorName: 'Test' });
+    expect(memberManualRes.status).toBe(403);
+    expect(memberManualRes.body.message).toContain('Donation.Create');
   });
 });

@@ -6,16 +6,14 @@ import helmet from 'helmet';
 import * as swStats from 'swagger-stats';
 import swaggerUi from 'swagger-ui-express';
 import { swaggerSpec } from './config/swagger';
-import { authMiddleware } from './middlewares/authMiddleWare';
 import { globalErrorHandler } from './middlewares/errorHandler';
 import { httpLogger } from './middlewares/httpLogger';
 import authRoutes from './modules/auth/auth.routes';
+import { donationRouter } from './modules/donation/donation.routes';
 import { donationCalendarRouter } from './modules/donation-calendar/calendar.routes';
 import { donorRouter } from './modules/donor/donor.routes';
 import healthRoutes from './modules/health/health.routes';
 import roleRouter from './modules/role/role.routes';
-import { createDonationRouter } from './modules/space/donation.routes';
-import { donationService } from './modules/space/donation.runtime';
 import { spaceRouter } from './modules/space/space.routes';
 import { userRouter } from './modules/user/user.routes';
 import { userSettingRouter } from './modules/user-setting/user-setting.routes';
@@ -52,7 +50,7 @@ app.use('/api/v1/role-permissions', roleRouter);
 app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/donors', donorRouter);
 app.use('/api/v1/user-settings', userSettingRouter);
-app.use('/api/v1/donations', authMiddleware, createDonationRouter(donationService));
+app.use('/api/v1/donations', donationRouter);
 app.use('/api/v1/donations', donationCalendarRouter);
 
 // Health check

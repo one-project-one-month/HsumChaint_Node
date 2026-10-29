@@ -4,9 +4,11 @@ import { createDonationService } from '../donation.service';
 
 type Row = Record<string, unknown>;
 type Query = { where?: Row; data?: Row; orderBy?: Row | Row[]; skip?: number; take?: number };
+
 function scalar(value: unknown) {
   return value instanceof Date ? value.getTime() : value;
 }
+
 function matches(row: Row, where: Row = {}): boolean {
   return Object.entries(where).every(([key, expected]) => {
     if (expected === undefined) return true;
@@ -16,6 +18,12 @@ function matches(row: Row, where: Row = {}): boolean {
       return scalar(actual) === scalar(expected);
     const filter = expected as Row;
     if ('in' in filter) return (filter.in as unknown[]).includes(actual);
+    if ('contains' in filter) {
+      return typeof actual === 'string' && actual.includes(String(filter.contains));
+    }
+    if ('startsWith' in filter) {
+      return typeof actual === 'string' && actual.startsWith(String(filter.startsWith));
+    }
     if ('gte' in filter || 'lt' in filter || 'lte' in filter) {
       if (actual == null) return false;
       const value = scalar(actual) as number;
@@ -54,6 +62,7 @@ export function donationFixture(withDonation = true) {
     donorList: [],
     notification: [],
   };
+
   function grant(roleId: number, name: string) {
     tables.rolePermission.push({
       roleId,
@@ -61,12 +70,17 @@ export function donationFixture(withDonation = true) {
       permission: { name, isDeleted: false },
     });
   }
-  for (const name of ['View', 'Create', 'Review', 'Schedule', 'Cancel', 'Delete'])
+
+  for (const name of ['View', 'Create', 'Review', 'Schedule', 'Cancel', 'Delete']) {
     grant(1, `Donation.${name}`);
-  for (const name of ['View', 'Create', 'Cancel']) grant(2, `Donation.${name}`);
+  }
+  for (const name of ['View', 'Create', 'Cancel']) {
+    grant(2, `Donation.${name}`);
+  }
   grant(20, 'Donation.Review');
   grant(21, 'Donation.Schedule');
   grant(7, 'Donation.View');
+
   let sequence = 100;
   function donation(values: Row = {}) {
     const row: Row = {
@@ -90,14 +104,17 @@ export function donationFixture(withDonation = true) {
       completedAt: null,
       ...values,
     };
-    for (const key of ['amount', 'quantity'])
+    for (const key of ['amount', 'quantity']) {
       if (row[key] != null) row[key] = new Prisma.Decimal(String(row[key]));
+    }
     tables.donorList.push(row);
     return row;
   }
+
   if (withDonation) donation();
+
   function enriched(name: string, row: Row) {
-    if (name === 'donorList' || name === 'monasteryMember')
+    if (name === 'donorList' || name === 'monasteryMember') {
       return {
         ...row,
         monasterySpace: tables.monasterySpace.find((space) => space.id === row.monasterySpaceId),
@@ -105,10 +122,16 @@ export function donationFixture(withDonation = true) {
           ? { user: tables.user.find((user) => user.id === row.userId) }
           : {}),
       };
+    }
     return row;
   }
+
   const delegate = (name: string) => ({
     findFirst: mock(
+      async ({ where }: Query = {}) =>
+        tables[name].find((row) => matches(enriched(name, row), where)) ?? null
+    ),
+    findUnique: mock(
       async ({ where }: Query = {}) =>
         tables[name].find((row) => matches(enriched(name, row), where)) ?? null
     ),
@@ -116,12 +139,13 @@ export function donationFixture(withDonation = true) {
       const rows = tables[name].filter((row) => matches(enriched(name, row), where));
       const orders = orderBy ? (Array.isArray(orderBy) ? orderBy : [orderBy]) : [];
       rows.sort((a, b) => {
-        for (const order of orders)
+        for (const order of orders) {
           for (const [key, direction] of Object.entries(order)) {
             const left = scalar(a[key]) as number;
             const right = scalar(b[key]) as number;
             if (left !== right) return (left < right ? -1 : 1) * (direction === 'desc' ? -1 : 1);
           }
+        }
         return 0;
       });
       return rows.slice(skip, take === undefined ? undefined : skip + take);
@@ -156,6 +180,7 @@ export function donationFixture(withDonation = true) {
       return row;
     }),
   });
+
   const delegates = {
     user: delegate('user'),
     monasterySpace: delegate('monasterySpace'),
@@ -164,6 +189,7 @@ export function donationFixture(withDonation = true) {
     donorList: delegate('donorList'),
     notification: delegate('notification'),
   };
+
   const db = {
     ...delegates,
     $transaction: async (action: unknown) => {
@@ -179,11 +205,13 @@ export function donationFixture(withDonation = true) {
       }
     },
   };
+
   const push = mock(async (_token: string, _message: string, _data: Record<string, string>) => {});
   const pushError = mock((_error: unknown) => {});
   const service = createDonationService(
     db as unknown as Parameters<typeof createDonationService>[0],
     { sendPush: push, onPushError: pushError }
   );
+
   return { tables, db, service, donation, grant, push, pushError };
 }

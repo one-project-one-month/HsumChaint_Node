@@ -1,5 +1,5 @@
 import { prisma } from '../src/lib/prisma';
-import { DONATION_PERMISSIONS } from '../src/modules/space/donation.schema';
+import { DONATION_PERMISSIONS } from '../src/modules/donation/donation.types';
 import { logger } from '../src/utils/logger';
 
 export const SYSTEM_ROLES = [
@@ -241,10 +241,10 @@ async function seedRbac() {
     }
   };
 
-  // Space Admin (1): Full space management (all 10)
+  // Space Admin (1): Full space management (all space permissions except Space.Delete, reserved for Owner)
   await assignSpacePermissions(
     1,
-    SPACE_PERMISSIONS.map((p) => p.name)
+    SPACE_PERMISSIONS.filter((p) => p.name !== 'Space.Delete').map((p) => p.name)
   );
 
   // Space Moderator (2)

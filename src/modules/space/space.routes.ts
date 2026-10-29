@@ -1,9 +1,8 @@
 import { Router } from 'express';
 import { authMiddleware } from '@/middlewares/authMiddleWare';
-import { checkPermission } from '@/middlewares/permissionMiddleware';
+import { checkPermission, requireSpacePermission } from '@/middlewares/permissionMiddleware';
 import { validator } from '@/middlewares/validator';
-import { createSpaceDonationRouter } from './donation.routes';
-import { donationService } from './donation.runtime';
+import { createSpaceDonationRouter } from '@/modules/donation/donation.routes';
 import {
   createSpace,
   deleteSpace,
@@ -33,7 +32,7 @@ export const spaceRouter = Router();
 
 // All space/monastery endpoints require authentication
 spaceRouter.use(authMiddleware);
-spaceRouter.use('/:spaceId/donations', createSpaceDonationRouter(donationService));
+spaceRouter.use('/:spaceId/donations', createSpaceDonationRouter());
 
 // Space Roles catalog (e.g. Space Admin, Space Moderator, Space Editor, Space Member)
 spaceRouter.get('/roles', getSpaceRoles);
@@ -48,11 +47,28 @@ spaceRouter.post(
 );
 spaceRouter.get('/', validator(spacePaginationSchema), getSpaces);
 spaceRouter.get('/:id', validator(spaceIdParamSchema), getSpaceById);
-spaceRouter.put('/:id', validator(updateSpaceSchema), updateSpace);
-spaceRouter.delete('/:id', validator(spaceIdParamSchema), deleteSpace);
+spaceRouter.put(
+  '/:id',
+  validator(spaceIdParamSchema),
+  requireSpacePermission('Space.Update'),
+  validator(updateSpaceSchema),
+  updateSpace
+);
+spaceRouter.delete(
+  '/:id',
+  validator(spaceIdParamSchema),
+  requireSpacePermission('Space.Delete'),
+  deleteSpace
+);
 
 // 2. Member Invitations
-spaceRouter.post('/:id/invitations', validator(inviteMemberSchema), inviteMember);
+spaceRouter.post(
+  '/:id/invitations',
+  validator(spaceIdParamSchema),
+  requireSpacePermission('Space.Member.Invite'),
+  validator(inviteMemberSchema),
+  inviteMember
+);
 spaceRouter.post(
   '/invitations/:invitationId/respond',
   validator(respondInvitationSchema),
@@ -60,8 +76,25 @@ spaceRouter.post(
 );
 
 // 3. Member Management
-spaceRouter.get('/:id/members', validator(spaceIdParamSchema), getSpaceMembers);
-spaceRouter.put('/:id/members/:userId', validator(updateMemberRoleSchema), updateMemberRole);
-spaceRouter.delete('/:id/members/:userId', validator(removeMemberSchema), removeSpaceMember);
+spaceRouter.get(
+  '/:id/members',
+  validator(spaceIdParamSchema),
+  requireSpacePermission('Space.View'),
+  getSpaceMembers
+);
+spaceRouter.put(
+  '/:id/members/:userId',
+  validator(spaceIdParamSchema),
+  requireSpacePermission('Space.Role.Manage'),
+  validator(updateMemberRoleSchema),
+  updateMemberRole
+);
+spaceRouter.delete(
+  '/:id/members/:userId',
+  validator(spaceIdParamSchema),
+  requireSpacePermission('Space.Member.Remove'),
+  validator(removeMemberSchema),
+  removeSpaceMember
+);
 
 export default spaceRouter;

@@ -31,13 +31,17 @@ export const resolveSpacePermissions = async (
   isOwner: boolean,
   isAdmin = false
 ): Promise<string[]> => {
-  if (isOwner || isAdmin || spaceRoleId === SPACE_ROLES.SPACE_ADMIN) {
+  if (isOwner || isAdmin) {
     return [...SPACE_PERMISSIONS];
   }
   if (!spaceRoleId) {
     return [];
   }
-  return await getSpaceRolePermissions(spaceRoleId);
+  if (spaceRoleId === SPACE_ROLES.SPACE_ADMIN) {
+    return SPACE_PERMISSIONS.filter((p) => p !== 'Space.Delete');
+  }
+  const perms = await getSpaceRolePermissions(spaceRoleId);
+  return perms.filter((p) => p !== 'Space.Delete');
 };
 
 export interface MonasteryMemberDto {
@@ -523,6 +527,12 @@ export const inviteMemberService = async (
   }
 
   const targetRoleId = request.spaceRoleId ?? request.roleId ?? SPACE_ROLES.SPACE_MEMBER;
+  if (targetRoleId === SPACE_ROLES.SPACE_ADMIN && !inviter?.isOwner && !isAdmin) {
+    throw new AppError(
+      'Only the monastery space owner or system admin can invite a Space Admin.',
+      403
+    );
+  }
   const spaceRole = await prisma.spaceRole.findFirst({
     where: { id: targetRoleId, isDeleted: false },
   });
@@ -757,10 +767,11 @@ export const getMembersService = async (
   );
 
   const items: MonasteryMemberDto[] = memberships.map((m) => {
-    const perms =
-      m.isOwner || m.spaceRoleId === SPACE_ROLES.SPACE_ADMIN
-        ? [...SPACE_PERMISSIONS]
-        : (rolePermMap.get(m.spaceRoleId) ?? []);
+    const perms = m.isOwner
+      ? [...SPACE_PERMISSIONS]
+      : m.spaceRoleId === SPACE_ROLES.SPACE_ADMIN
+        ? SPACE_PERMISSIONS.filter((p) => p !== 'Space.Delete')
+        : (rolePermMap.get(m.spaceRoleId) ?? []).filter((p) => p !== 'Space.Delete');
 
     return {
       id: m.id,
@@ -815,6 +826,20 @@ export const updateMemberRoleService = async (
 
   if (member.isOwner) {
     throw new AppError('Owner member role cannot be changed.', 400);
+  }
+
+  if (targetRoleId === SPACE_ROLES.SPACE_ADMIN && !actor?.isOwner && !isAdmin) {
+    throw new AppError(
+      'Only the monastery space owner or system admin can assign the Space Admin role.',
+      403
+    );
+  }
+
+  if (member.spaceRoleId === SPACE_ROLES.SPACE_ADMIN && !actor?.isOwner && !isAdmin) {
+    throw new AppError(
+      'Only the monastery space owner or system admin can change a Space Admin role.',
+      403
+    );
   }
 
   const updated = await prisma.monasteryMember.update({
@@ -875,6 +900,13 @@ export const removeMemberService = async (
 
   if (member.isOwner) {
     throw new AppError('Owner member cannot be removed.', 400);
+  }
+
+  if (member.spaceRoleId === SPACE_ROLES.SPACE_ADMIN && !actor?.isOwner && !isAdmin) {
+    throw new AppError(
+      'Only the monastery space owner or system admin can remove a Space Admin.',
+      403
+    );
   }
 
   const user =

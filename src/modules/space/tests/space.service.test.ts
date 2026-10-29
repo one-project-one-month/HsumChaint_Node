@@ -839,6 +839,50 @@ describe('Monastery Service Unit Tests (matching C# HsumChaint)', () => {
         false
       );
     });
+
+    it('should allow space owner to invite a Space Admin, but invited Space Admin does not have Space.Delete permission', async () => {
+      const space = await createMonasteryService(1, { monasteryName: 'Monastery Invite Admin' });
+      const invitation = await inviteMemberService(1, space.id, {
+        roleId: SPACE_ROLES.SPACE_ADMIN,
+        userId: 2,
+      });
+
+      expect(invitation.spaceRoleId).toBe(SPACE_ROLES.SPACE_ADMIN);
+      expect(invitation.spaceRoleName).toBe('Space Admin');
+
+      // User 2 accepts invitation
+      await respondToInvitationService(2, invitation.invitationId, { status: 1 });
+
+      // User 2 retrieves space details
+      const spaceDetails = await getMonasteryService(2, space.id);
+      expect(spaceDetails.isOwner).toBe(false);
+      expect(spaceDetails.currentUserRoleName).toBe('Space Admin');
+      expect(spaceDetails.permissions).toContain('Space.View');
+      expect(spaceDetails.permissions).toContain('Space.Update');
+      expect(spaceDetails.permissions).not.toContain('Space.Delete');
+    });
+
+    it('should reject non-owner inviting a Space Admin', async () => {
+      const space = await createMonasteryService(1, {
+        monasteryName: 'Monastery Non-Owner Invite',
+      });
+      // User 2 is a Moderator (not owner)
+      mockMembers.push({
+        id: 50,
+        userId: 2,
+        monasterySpaceId: space.id,
+        spaceRoleId: SPACE_ROLES.SPACE_MODERATOR,
+        isOwner: false,
+      });
+
+      // User 2 tries to invite user 3 as Space Admin
+      await expect(
+        inviteMemberService(2, space.id, {
+          roleId: SPACE_ROLES.SPACE_ADMIN,
+          userId: 3,
+        })
+      ).rejects.toThrow('Only the monastery space owner or system admin can invite a Space Admin.');
+    });
   });
 
   describe('Member Management (getMembers, updateMemberRole, removeMember)', () => {
@@ -983,6 +1027,88 @@ describe('Monastery Service Unit Tests (matching C# HsumChaint)', () => {
       );
       expect(invitation.invitedUserId).toBe(2);
       expect(invitation.spaceRoleName).toBe('Space Member');
+    });
+
+    it('should allow owner to promote member to Space Admin and ensure Space.Delete is not granted', async () => {
+      const space = await createMonasteryService(1, { monasteryName: 'Monastery Roles Promo' });
+      mockMembers.push({
+        id: 60,
+        userId: 2,
+        monasterySpaceId: space.id,
+        spaceRoleId: SPACE_ROLES.SPACE_MEMBER,
+        isOwner: false,
+      });
+
+      const updated = await updateMemberRoleService(1, space.id, 2, {
+        roleId: SPACE_ROLES.SPACE_ADMIN,
+      });
+
+      expect(updated.spaceRoleId).toBe(SPACE_ROLES.SPACE_ADMIN);
+      expect(updated.isOwner).toBe(false);
+      expect(updated.permissions).toContain('Space.View');
+      expect(updated.permissions).not.toContain('Space.Delete');
+    });
+
+    it('should reject non-owner promoting member to Space Admin', async () => {
+      const space = await createMonasteryService(1, { monasteryName: 'Monastery Roles PrivEsc' });
+      // User 2 is Moderator
+      mockMembers.push({
+        id: 61,
+        userId: 2,
+        monasterySpaceId: space.id,
+        spaceRoleId: SPACE_ROLES.SPACE_MODERATOR,
+        isOwner: false,
+      });
+      // User 3 is Member
+      mockMembers.push({
+        id: 62,
+        userId: 3,
+        monasterySpaceId: space.id,
+        spaceRoleId: SPACE_ROLES.SPACE_MEMBER,
+        isOwner: false,
+      });
+
+      await expect(
+        updateMemberRoleService(2, space.id, 3, {
+          roleId: SPACE_ROLES.SPACE_ADMIN,
+        })
+      ).rejects.toThrow(
+        'Only the monastery space owner or system admin can assign the Space Admin role.'
+      );
+    });
+
+    it('should reject non-owner removing or modifying a Space Admin', async () => {
+      const space = await createMonasteryService(1, { monasteryName: 'Monastery Roles Protect' });
+      // User 2 is Moderator
+      mockMembers.push({
+        id: 63,
+        userId: 2,
+        monasterySpaceId: space.id,
+        spaceRoleId: SPACE_ROLES.SPACE_MODERATOR,
+        isOwner: false,
+      });
+      // User 3 is an invited Space Admin
+      mockMembers.push({
+        id: 64,
+        userId: 3,
+        monasterySpaceId: space.id,
+        spaceRoleId: SPACE_ROLES.SPACE_ADMIN,
+        isOwner: false,
+      });
+
+      // User 2 tries to demote user 3
+      await expect(
+        updateMemberRoleService(2, space.id, 3, {
+          roleId: SPACE_ROLES.SPACE_MEMBER,
+        })
+      ).rejects.toThrow(
+        'Only the monastery space owner or system admin can change a Space Admin role.'
+      );
+
+      // User 2 tries to remove user 3
+      await expect(removeMemberService(2, space.id, 3)).rejects.toThrow(
+        'Only the monastery space owner or system admin can remove a Space Admin.'
+      );
     });
 
     it('should retrieve all space roles via getSpaceRolesService', async () => {

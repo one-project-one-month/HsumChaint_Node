@@ -22,6 +22,7 @@ router.post('/create', validateCreateDonor, createDonor);
 router.get('/:id', validateGetDonorById, getDonorById);
 
 router.put('/:id', validateUpdateDonor, updateDonor);
+router.patch('/:id', validateUpdateDonor, updateDonor);
 
 router.delete('/:id', validateDeleteDonor, deleteDonor);
 
