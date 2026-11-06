@@ -13,6 +13,7 @@ import { donationRouter } from './modules/donation/donation.routes';
 import { donationCalendarRouter } from './modules/donation-calendar/calendar.routes';
 import { donorRouter } from './modules/donor/donor.routes';
 import healthRoutes from './modules/health/health.routes';
+import { notificationRouter } from './modules/notification/notification.routes';
 import roleRouter from './modules/role/role.routes';
 import { spaceRouter } from './modules/space/space.routes';
 import { userRouter } from './modules/user/user.routes';
@@ -51,6 +52,7 @@ app.use('/api/v1/role-permissions', roleRouter);
 app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/donors', donorRouter);
 app.use('/api/v1/user-settings', userSettingRouter);
+app.use('/api/v1/notifications', notificationRouter);
 app.use('/api/v1/donations', donationRouter);
 app.use('/api/v1/donations', donationCalendarRouter);
 

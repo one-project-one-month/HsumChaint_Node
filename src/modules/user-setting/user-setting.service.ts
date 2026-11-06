@@ -1,5 +1,5 @@
 import { prisma } from '@/lib/prisma';
-import type { SettingInput } from './user-setting.schema';
+import type { SettingInput, UpdateUserSettingBodyInput } from './user-setting.schema';
 
 export const encodeTime = (time: string) => new Date(`1970-01-01T${time}:00+06:30`);
 
@@ -31,3 +31,14 @@ export async function saveSetting(userId: number, input: SettingInput = {}) {
     ),
   };
 }
+
+export const getUserSettingService = async (userId: number) => {
+  return saveSetting(userId);
+};
+
+export const updateUserSettingService = async (
+  userId: number,
+  input: UpdateUserSettingBodyInput
+) => {
+  return saveSetting(userId, input);
+};
