@@ -4,6 +4,7 @@ import { successResponse } from '@/utils/response';
 import type {
   forgotPasswordInput,
   LoginInput,
+  RefreshTokenInput,
   RegisterInput,
   resetPasswordInput,
 } from './auth.schema';
@@ -15,6 +16,7 @@ import {
   registerUser,
   resetPasswordService,
 } from './auth.service';
+
 export const register = async (
   req: Request<unknown, unknown, RegisterInput>,
   res: Response,
@@ -22,19 +24,20 @@ export const register = async (
 ) => {
   try {
     const result = await registerUser(req.body);
-    //set refresh token in cookie
+    // set refresh token in cookie
     res.cookie('refreshToken', result.refreshToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
       maxAge: 30 * 24 * 60 * 60 * 1000,
     });
-    res.setHeader('Authorization', `Bearer ${result.accessToken}`);
-    return successResponse(res, result, 'Register successful');
+    res.setHeader('Authorization', `Bearer ${result.token}`);
+    return successResponse(res, result, 'User registered successfully.', 201);
   } catch (error) {
     next(error);
   }
 };
+
 export const login = async (
   req: Request<unknown, unknown, LoginInput>,
   res: Response,
@@ -42,42 +45,48 @@ export const login = async (
 ) => {
   try {
     const result = await loginUser(req.body);
-    //set refresh token in cookie
+    // set refresh token in cookie
     res.cookie('refreshToken', result.refreshToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
       maxAge: 30 * 24 * 60 * 60 * 1000,
     });
-    res.setHeader('Authorization', `Bearer ${result.accessToken}`);
-    //return only accessToken + user
-    return successResponse(res, result, 'Login successful');
+    res.setHeader('Authorization', `Bearer ${result.token}`);
+    return successResponse(res, result, 'Login successful.');
   } catch (error) {
     next(error);
   }
 };
-export const refreshAccessToken = async (req: Request, res: Response, next: NextFunction) => {
+
+export const refreshAccessToken = async (
+  req: Request<unknown, unknown, RefreshTokenInput>,
+  res: Response,
+  next: NextFunction
+) => {
   try {
-    const refreshToken = req.cookies.refreshToken || req.body.refreshToken;
+    const refreshToken = req.cookies.refreshToken || req.body?.refreshToken;
     if (!refreshToken) {
       throw new AppError('Refresh token missing', 401);
     }
-    const result = await refreshTokenService(refreshToken);
-    //update cookie with new refresh token
+    const expectedUserId = req.body?.userId ? Number(req.body.userId) : undefined;
+    const result = await refreshTokenService(refreshToken, expectedUserId);
+    // update cookie with new refresh token
     res.cookie('refreshToken', result.refreshToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
       maxAge: 30 * 24 * 60 * 60 * 1000,
     });
-    return successResponse(res, result, 'Token refreshed');
+    return successResponse(res, result, 'Token refreshed successfully.');
   } catch (error) {
     next(error);
   }
 };
+
 export const logout = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const refreshToken = req.cookies.refreshToken || req.body.refreshToken;
+    const refreshToken = req.cookies.refreshToken || req.body?.refreshToken;
     if (!refreshToken) {
       throw new AppError('Refresh Token is missing', 401);
     }
@@ -87,11 +96,12 @@ export const logout = async (req: Request, res: Response, next: NextFunction) =>
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
     });
-    return successResponse(res, null, 'Logout successfully');
+    return successResponse(res, null, 'Logged out successfully.');
   } catch (error) {
     next(error);
   }
 };
+
 export const forgotPassword = async (
   req: Request<unknown, unknown, forgotPasswordInput>,
   res: Response,
@@ -99,19 +109,24 @@ export const forgotPassword = async (
 ) => {
   try {
     const result = await forgotPasswordService(req.body.phone);
-    return successResponse(res, result, 'Reset Token generated successfully');
+    return successResponse(
+      res,
+      { resetToken: result.resetToken },
+      'Password reset token generated successfully.'
+    );
   } catch (error) {
     next(error);
   }
 };
+
 export const resetPassword = async (
   req: Request<unknown, unknown, resetPasswordInput>,
   res: Response,
   next: NextFunction
 ) => {
   try {
-    const result = await resetPasswordService(req.body);
-    return successResponse(res, result, 'Password reset successfully');
+    await resetPasswordService(req.body);
+    return successResponse(res, null, 'Password reset successfully.');
   } catch (error) {
     next(error);
   }
