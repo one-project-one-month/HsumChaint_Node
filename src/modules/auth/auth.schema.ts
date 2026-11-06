@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-//handles 09, 959, and +959
+// handles 09, 959, and +959
 const myanmarPhoneRegex = /^(09|\+?959)\d{7,9}$/;
 export const phoneSchema = z
   .string('Phone number is required')
@@ -11,36 +11,56 @@ export const phoneSchema = z
     if (value.startsWith('959')) return `09${value.slice(3)}`;
     return value;
   });
+
 export const passwordSchema = z
   .string('password is required')
   .min(6, 'password must be at least 6 characters');
+
+const normalizePhoneFields = (data: unknown) => {
+  if (data && typeof data === 'object') {
+    const obj = { ...(data as Record<string, unknown>) };
+    if (!obj.phone && typeof obj.phoneNumber === 'string') {
+      obj.phone = obj.phoneNumber;
+    }
+    if (!obj.contactPhone && typeof obj.contactPhoneNumber === 'string') {
+      obj.contactPhone = obj.contactPhoneNumber;
+    }
+    return obj;
+  }
+  return data;
+};
+
 export const registerSchema = z.object({
   body: z
-    .object({
-      phone: phoneSchema,
-      name: z.string('name is required').trim().min(3, 'Name must be at least 3 characters'),
-      email: z.string().trim().toLowerCase().email('Invalid email').optional(),
-      contactPhone: phoneSchema.optional(),
-      avatar: z.string().optional(),
-      password: passwordSchema,
-      roleId: z.union([z.literal(1), z.literal(2)]),
-      monasteryName: z.string().optional(),
-      monasteryAddress: z.string().optional(),
-      fcmToken: z.string().optional(),
-    })
+    .preprocess(
+      normalizePhoneFields,
+      z.object({
+        phone: phoneSchema,
+        phoneNumber: z.string().optional(),
+        name: z.string('name is required').trim().min(3, 'Name must be at least 3 characters'),
+        email: z.string().trim().toLowerCase().email('Invalid email').optional(),
+        contactPhone: phoneSchema.optional(),
+        contactPhoneNumber: z.string().optional(),
+        avatar: z.string().optional(),
+        password: passwordSchema,
+        // System roles: 1: Monk, 2: Donor
+        roleId: z.union([z.literal(1), z.literal(2)]),
+        monasteryName: z.string().optional(),
+        monasteryAddress: z.string().optional(),
+        fcmToken: z.string().optional(),
+      })
+    )
     .superRefine((data, ctx) => {
-      // Assuming roleId 1 is Monk
+      // Role ID 1 is Monk in current system state
       if (data.roleId === 1) {
-        //add custom issue to monasteryName
-        if (!data.monasteryName) {
+        if (!data.monasteryName || data.monasteryName.trim() === '') {
           ctx.addIssue({
             code: z.ZodIssueCode.custom,
             message: 'Monastery name is required',
             path: ['monasteryName'],
           });
         }
-        //add custom issue to monasteryAddress
-        if (!data.monasteryAddress) {
+        if (!data.monasteryAddress || data.monasteryAddress.trim() === '') {
           ctx.addIssue({
             code: z.ZodIssueCode.custom,
             message: 'Monastery address is required',
@@ -50,18 +70,23 @@ export const registerSchema = z.object({
       }
     }),
 });
+
 export const loginSchema = z.object({
-  body: z
-    .object({
+  body: z.preprocess(
+    normalizePhoneFields,
+    z.object({
       phone: phoneSchema,
+      phoneNumber: z.string().optional(),
       password: passwordSchema,
     })
-    .strict(),
+  ),
 });
+
 export const refreshTokenSchema = z
   .object({
     body: z.object({
       refreshToken: z.string().optional(),
+      userId: z.union([z.number(), z.string().transform(Number)]).optional(),
     }),
     cookies: z.object({
       refreshToken: z.string().optional(),
@@ -71,18 +96,26 @@ export const refreshTokenSchema = z
     message: 'Refresh token is required',
     path: ['refreshToken'],
   });
+
 export const forgotPasswordSchema = z.object({
-  body: z.object({
-    phone: phoneSchema,
-  }),
+  body: z.preprocess(
+    normalizePhoneFields,
+    z.object({
+      phone: phoneSchema,
+      phoneNumber: z.string().optional(),
+    })
+  ),
 });
+
 export const resetPasswordSchema = z.object({
   body: z.object({
     resetToken: z.string().min(1),
     password: passwordSchema,
   }),
 });
+
 export type RegisterInput = z.infer<typeof registerSchema>['body'];
 export type LoginInput = z.infer<typeof loginSchema>['body'];
+export type RefreshTokenInput = z.infer<typeof refreshTokenSchema>['body'];
 export type forgotPasswordInput = z.infer<typeof forgotPasswordSchema>['body'];
 export type resetPasswordInput = z.infer<typeof resetPasswordSchema>['body'];
