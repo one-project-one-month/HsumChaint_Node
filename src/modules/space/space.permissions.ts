@@ -16,12 +16,16 @@ export const SPACE_ROLE_NAMES: Record<SpaceRoleId, string> = {
 
 export const SPACE_PERMISSIONS = [
   'Space.View',
+  'Space.ViewMembers',
   'Space.Update',
   'Space.Delete',
   'Space.Member.Invite',
+  'Space.InviteMember',
   'Space.Member.Manage',
   'Space.Member.Remove',
+  'Space.RemoveMember',
   'Space.Role.Manage',
+  'Space.UpdateMemberRole',
   'Space.Post.Create',
   'Space.Donation.Create',
   'Space.Donation.Review',

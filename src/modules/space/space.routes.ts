@@ -109,7 +109,7 @@ spaceRouter.get(
   '/:id/members',
   authMiddleware,
   validator(membersPaginationSchema),
-  requireSpacePermission('Space.View'),
+  requireSpacePermission('Space.ViewMembers'),
   getSpaceMembers
 );
 
@@ -117,14 +117,14 @@ spaceRouter.get(
 spaceRouter.put(
   '/:id/members/:memberUserId/role',
   authMiddleware,
-  requireSpacePermission('Space.Role.Manage'),
+  requireSpacePermission('Space.UpdateMemberRole'),
   validator(updateMemberRoleSchema),
   updateMemberRole
 );
 spaceRouter.put(
   '/:id/members/:userId',
   authMiddleware,
-  requireSpacePermission('Space.Role.Manage'),
+  requireSpacePermission('Space.UpdateMemberRole'),
   validator(updateMemberRoleSchema),
   updateMemberRole
 );
@@ -133,14 +133,14 @@ spaceRouter.put(
 spaceRouter.delete(
   '/:id/members/:memberUserId',
   authMiddleware,
-  requireSpacePermission('Space.Member.Remove'),
+  requireSpacePermission('Space.RemoveMember'),
   validator(removeMemberSchema),
   removeSpaceMember
 );
 spaceRouter.delete(
   '/:id/members/:userId',
   authMiddleware,
-  requireSpacePermission('Space.Member.Remove'),
+  requireSpacePermission('Space.RemoveMember'),
   validator(removeMemberSchema),
   removeSpaceMember
 );
@@ -150,7 +150,7 @@ spaceRouter.post(
   '/:id/invitations',
   authMiddleware,
   validator(spaceIdParamSchema),
-  requireSpacePermission('Space.Member.Invite'),
+  requireSpacePermission('Space.InviteMember'),
   validator(inviteMemberSchema),
   inviteMember
 );

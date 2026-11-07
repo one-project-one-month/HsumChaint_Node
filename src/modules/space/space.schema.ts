@@ -116,17 +116,13 @@ export const respondInvitationSchema = z.object({
   body: z.object({
     status: z
       .union([z.boolean(), z.number(), z.enum(['accept', 'reject', 'Accept', 'Reject'])])
-      .transform((val): 1 | 2 | 0 => {
-        // 1 / true / 'accept' -> 1 (Accept)
-        if (val === 1 || val === true || val === 'accept' || val === 'Accept') {
-          return 1;
+      .transform((val): 2 | 3 => {
+        // 2 / 1 / true / 'accept' -> 2 (Accept)
+        if (val === 2 || val === 1 || val === true || val === 'accept' || val === 'Accept') {
+          return 2;
         }
-        // 0 / false -> 0 (Reject)
-        if (val === 0 || val === false) {
-          return 0;
-        }
-        // 2 / 'reject' -> 2 (Reject)
-        return 2;
+        // 3 / 0 / false / 'reject' -> 3 (Reject)
+        return 3;
       }),
   }),
 });
