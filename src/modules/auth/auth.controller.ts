@@ -1,15 +1,17 @@
 import type { NextFunction, Request, Response } from 'express';
 import { AppError } from '@/utils/AppError';
-import { successResponse } from '@/utils/response';
+import { successResponse, voidSuccessResponse } from '@/utils/response';
 import type {
   forgotPasswordInput,
   LoginInput,
+  LogoutInput,
   RefreshTokenInput,
   RegisterInput,
   resetPasswordInput,
 } from './auth.schema';
 import {
   forgotPasswordService,
+  getLoginModeService,
   loginUser,
   logoutUser,
   refreshTokenService,
@@ -31,8 +33,8 @@ export const register = async (
       sameSite: 'lax',
       maxAge: 30 * 24 * 60 * 60 * 1000,
     });
-    res.setHeader('Authorization', `Bearer ${result.token}`);
-    return successResponse(res, result, 'User registered successfully.', 201);
+    res.setHeader('Authorization', `Bearer ${result.accessToken}`);
+    return voidSuccessResponse(res, 'Register Successful', 200);
   } catch (error) {
     next(error);
   }
@@ -52,8 +54,8 @@ export const login = async (
       sameSite: 'lax',
       maxAge: 30 * 24 * 60 * 60 * 1000,
     });
-    res.setHeader('Authorization', `Bearer ${result.token}`);
-    return successResponse(res, result, 'Login successful.');
+    res.setHeader('Authorization', `Bearer ${result.accessToken}`);
+    return successResponse(res, result, 'Login Successful');
   } catch (error) {
     next(error);
   }
@@ -65,9 +67,10 @@ export const refreshAccessToken = async (
   next: NextFunction
 ) => {
   try {
-    const refreshToken = req.cookies.refreshToken || req.body?.refreshToken;
+    // When body refreshToken is provided, prioritize it over cookies
+    const refreshToken = req.body?.refreshToken || req.cookies?.refreshToken;
     if (!refreshToken) {
-      throw new AppError('Refresh token missing', 401);
+      throw new AppError('Invalid or expired Refresh Token', 400);
     }
     const expectedUserId = req.body?.userId ? Number(req.body.userId) : undefined;
     const result = await refreshTokenService(refreshToken, expectedUserId);
@@ -78,15 +81,19 @@ export const refreshAccessToken = async (
       sameSite: 'lax',
       maxAge: 30 * 24 * 60 * 60 * 1000,
     });
-    return successResponse(res, result, 'Token refreshed successfully.');
+    return successResponse(res, result, 'Successful');
   } catch (error) {
     next(error);
   }
 };
 
-export const logout = async (req: Request, res: Response, next: NextFunction) => {
+export const logout = async (
+  req: Request<unknown, unknown, LogoutInput>,
+  res: Response,
+  next: NextFunction
+) => {
   try {
-    const refreshToken = req.cookies.refreshToken || req.body?.refreshToken;
+    const refreshToken = req.body?.refreshToken || req.cookies?.refreshToken;
     if (!refreshToken) {
       throw new AppError('Refresh Token is missing', 401);
     }
@@ -96,7 +103,16 @@ export const logout = async (req: Request, res: Response, next: NextFunction) =>
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
     });
-    return successResponse(res, null, 'Logged out successfully.');
+    return voidSuccessResponse(res, 'Logged out successfully.');
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getLoginMode = async (_req: Request, res: Response, next: NextFunction) => {
+  try {
+    const result = await getLoginModeService();
+    return successResponse(res, result, 'Success');
   } catch (error) {
     next(error);
   }
@@ -109,11 +125,7 @@ export const forgotPassword = async (
 ) => {
   try {
     const result = await forgotPasswordService(req.body.phone);
-    return successResponse(
-      res,
-      { resetToken: result.resetToken },
-      'Password reset token generated successfully.'
-    );
+    return successResponse(res, result, 'Password reset email sent');
   } catch (error) {
     next(error);
   }
@@ -126,7 +138,7 @@ export const resetPassword = async (
 ) => {
   try {
     await resetPasswordService(req.body);
-    return successResponse(res, null, 'Password reset successfully.');
+    return voidSuccessResponse(res, 'Password successfully reset');
   } catch (error) {
     next(error);
   }
