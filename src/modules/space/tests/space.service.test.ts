@@ -921,10 +921,10 @@ describe('Monastery Service Unit Tests (matching C# HsumChaint)', () => {
       });
 
       const response = await respondToInvitationService(2, invitation.invitationId, {
-        status: 1, // Accept
+        status: 2, // Accept
       });
 
-      expect(response.status).toBe(1);
+      expect(response.status).toBe(2);
       expect(mockMembers.some((m) => m.userId === 2 && m.monasterySpaceId === space.id)).toBe(true);
     });
 
@@ -936,10 +936,10 @@ describe('Monastery Service Unit Tests (matching C# HsumChaint)', () => {
       });
 
       const response = await respondToInvitationService(2, invitation.invitationId, {
-        status: 2, // Reject
+        status: 3, // Reject
       });
 
-      expect(response.status).toBe(2);
+      expect(response.status).toBe(3);
       expect(mockMembers.some((m) => m.userId === 2 && m.monasterySpaceId === space.id)).toBe(
         false
       );
@@ -956,7 +956,7 @@ describe('Monastery Service Unit Tests (matching C# HsumChaint)', () => {
       expect(invitation.spaceRoleName).toBe('Space Admin');
 
       // User 2 accepts invitation
-      await respondToInvitationService(2, invitation.invitationId, { status: 1 });
+      await respondToInvitationService(2, invitation.invitationId, { status: 2 });
 
       // User 2 retrieves space details
       const spaceDetails = await getMonasteryService(2, space.id);

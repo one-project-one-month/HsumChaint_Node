@@ -125,5 +125,27 @@ describe('Monastery Space Routes HTTP Integration Tests', () => {
 
     const resRoles = await request(app).get('/api/v1/monasteries/1/roles');
     expect(resRoles.status).toBe(401);
+
+    const resMembers = await request(app).get('/api/v1/monasteries/1/members');
+    expect(resMembers.status).toBe(401);
+
+    const resInvite = await request(app).post('/api/v1/monasteries/1/invitations').send({
+      phoneNumber: '09100000003',
+      spaceRoleId: 3,
+    });
+    expect(resInvite.status).toBe(401);
+
+    const resRespond = await request(app).post('/api/v1/monasteries/invitations/1/respond').send({
+      status: 2,
+    });
+    expect(resRespond.status).toBe(401);
+
+    const resUpdateRole = await request(app)
+      .put('/api/v1/monasteries/1/members/2/role')
+      .send({ spaceRoleId: 2 });
+    expect(resUpdateRole.status).toBe(401);
+
+    const resRemoveMember = await request(app).delete('/api/v1/monasteries/1/members/2');
+    expect(resRemoveMember.status).toBe(401);
   });
 });
