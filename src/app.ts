@@ -44,13 +44,10 @@ app.use(cookieParser());
 app.use(httpLogger);
 
 // Routes
-app.use('/api/user', userRouter);
 app.use('/api/v1/users', userRouter);
-app.use('/api/v1/monasteries', spaceRouter);
 app.use('/api/v1/spaces', spaceRouter);
 app.use('/api/v1/roles', roleRouter);
 app.use('/api/v1/role-permissions', roleRouter);
-app.use('/api/auth', authRoutes);
 app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/donors', donorRouter);
 app.use('/api/v1/user-settings', userSettingRouter);
