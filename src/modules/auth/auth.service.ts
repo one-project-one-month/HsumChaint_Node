@@ -13,6 +13,20 @@ import type { LoginInput, RegisterInput, resetPasswordInput } from './auth.schem
 
 // register
 export const registerUser = async (data: RegisterInput) => {
+  // Reject registering as protected role (e.g. Admin, roleId: 3)
+  if (data.roleId === 3) {
+    throw new AppError('Forbidden', 403);
+  }
+
+  // Reject donor attempting to add monastery details
+  if (
+    data.roleId === 2 &&
+    ((data.monasteryName && data.monasteryName.trim() !== '') ||
+      (data.monasteryAddress && data.monasteryAddress.trim() !== ''))
+  ) {
+    throw new AppError('Donors cannot have monastery name or monastery address', 400);
+  }
+
   const phone = data.phone;
   const conditions: Prisma.UserWhereInput[] = [{ phone }];
   if (data.email) {
@@ -25,7 +39,7 @@ export const registerUser = async (data: RegisterInput) => {
     },
   });
   if (existingUser) {
-    throw new AppError('User already exists', 400);
+    throw new AppError('Phone number already exists.', 400);
   }
   if (data.contactPhone) {
     const existingContactPhone = await prisma.user.findFirst({
@@ -100,17 +114,17 @@ export const registerUser = async (data: RegisterInput) => {
   await clearUserListCache();
 
   return {
+    id: result.user.id,
     userId: result.user.id,
     name: result.user.name,
     phoneNumber: result.user.phone,
+    phone: result.user.phone,
     roleId: result.user.roleId,
     roleName,
-    token: result.accessToken,
-    refreshToken: result.refreshToken,
-    permissions,
-    // Backward compatibility aliases
     accessToken: result.accessToken,
-    phone: result.user.phone,
+    refreshToken: result.refreshToken,
+    token: result.accessToken,
+    permissions,
     user: profileData,
     monkProfile: result.monkProfile,
   };
@@ -124,11 +138,11 @@ export const loginUser = async (data: LoginInput) => {
     include: { monkProfile: true, role: true },
   });
   if (!user) {
-    throw new AppError('Invalid phone or password', 401);
+    throw new AppError('Phone number or password incorrect!', 400);
   }
   const isPasswordMatch = await Bun.password.verify(data.password, user.password);
   if (!isPasswordMatch) {
-    throw new AppError('Invalid phone or password', 401);
+    throw new AppError('Phone number or password incorrect!', 400);
   }
 
   const { accessToken, refreshToken } = await createAuthSession(prisma, user.id, user.roleId);
@@ -156,19 +170,14 @@ export const loginUser = async (data: LoginInput) => {
     console.error('Redis Set Login Cache Error:', error);
   }
 
+  // Exact .NET response contract
   return {
-    userId: user.id,
-    name: user.name,
-    phoneNumber: user.phone,
+    id: user.id,
     roleId: user.roleId,
     roleName,
-    token: accessToken,
-    refreshToken,
     permissions,
-    // Backward compatibility aliases
     accessToken,
-    phone: user.phone,
-    user: profileData,
+    refreshToken,
   };
 };
 
@@ -178,7 +187,7 @@ export const refreshTokenService = async (refreshToken: string, expectedUserId?:
   try {
     payload = jwt.verify(refreshToken, env.JWT_REFRESH_TOKEN_SECRET) as TokenPayload;
   } catch {
-    throw new AppError('Invalid or expired refresh token', 401);
+    throw new AppError('Invalid or expired Refresh Token', 400);
   }
 
   if (
@@ -186,7 +195,7 @@ export const refreshTokenService = async (refreshToken: string, expectedUserId?:
     !Number.isNaN(expectedUserId) &&
     payload.userId !== expectedUserId
   ) {
-    throw new AppError('Invalid refresh token for provided user', 401);
+    throw new AppError('Invalid or expired Refresh Token', 400);
   }
 
   const storedToken = await prisma.refreshToken.findFirst({
@@ -197,28 +206,39 @@ export const refreshTokenService = async (refreshToken: string, expectedUserId?:
     },
   });
   if (!storedToken) {
-    throw new AppError('Invalid refresh token', 401);
+    throw new AppError('Invalid or expired Refresh Token', 400);
   }
 
   return await prisma.$transaction(async (tx) => {
     const user = await tx.user.findFirst({
       where: { id: payload.userId, isDeleted: false },
-      select: { roleId: true },
+      include: { role: true },
     });
-    if (!user) throw new AppError('Invalid refresh token', 401);
+    if (!user) throw new AppError('Invalid or expired Refresh Token', 400);
+
     await tx.refreshToken.update({
       where: { id: storedToken.id },
       data: { revokedAt: new Date() },
     });
+
     const { accessToken, refreshToken: newRefreshToken } = await createAuthSession(
       tx,
       payload.userId,
       user.roleId
     );
+
+    const permissions = await getRolePermissions(user.roleId);
+    const roleName =
+      user.role?.name || (user.roleId === 1 ? 'Monk' : user.roleId === 2 ? 'Donor' : 'Admin');
+
+    // Exact .NET response contract
     return {
-      token: accessToken,
-      refreshToken: newRefreshToken,
+      id: user.id,
+      roleId: user.roleId,
+      roleName,
+      permissions,
       accessToken,
+      refreshToken: newRefreshToken,
     };
   });
 };
@@ -255,13 +275,22 @@ export const logoutUser = async (refreshToken: string) => {
   return { message: 'Logged out successfully.' };
 };
 
+// login mode
+export const getLoginModeService = async () => {
+  return {
+    code: 'phone_or_email',
+    requirePhoneVerification: false,
+    requireEmailVerification: true,
+  };
+};
+
 // forgot password handle
 export const forgotPasswordService = async (phone: string) => {
   const user = await prisma.user.findUnique({
     where: { phone },
   });
   if (!user) {
-    throw new AppError('User is not found', 404);
+    throw new AppError('User not found', 404);
   }
   const rawResetToken = crypto.randomBytes(32).toString('hex');
   const hashResetToken = crypto.createHash('sha256').update(rawResetToken).digest('hex');
