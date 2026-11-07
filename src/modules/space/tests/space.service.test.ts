@@ -164,11 +164,12 @@ mock.module('@/lib/prisma', () => ({
             OR?: Array<{
               monasteryName?: { contains?: string };
               address?: { contains?: string };
+              description?: { contains?: string };
             }>;
           };
           skip?: number;
           take?: number;
-          include?: unknown;
+          include?: { createdBy?: unknown; _count?: unknown };
           orderBy?: unknown;
         }) => {
           let list = mockSpaces.filter((s) => !s.isDeleted);
@@ -250,6 +251,7 @@ mock.module('@/lib/prisma', () => ({
             OR?: Array<{
               monasteryName?: { contains?: string };
               address?: { contains?: string };
+              description?: { contains?: string };
             }>;
           };
         }) => {
@@ -348,7 +350,7 @@ mock.module('@/lib/prisma', () => ({
           };
           take?: number;
           skip?: number;
-          include?: unknown;
+          include?: { createdBy?: unknown; _count?: unknown };
           orderBy?: unknown;
         }) => {
           const { where } = args;

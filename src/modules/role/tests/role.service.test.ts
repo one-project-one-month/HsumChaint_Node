@@ -292,7 +292,7 @@ describe('Role & Dynamic RBAC Service Unit Tests', () => {
 
   describe('getRolesService & getRoleByIdService', () => {
     it('should retrieve a paginated list of active roles with formatted permissions', async () => {
-      const result = await getRolesService({ page: 1, limit: 5 });
+      const result = await getRolesService({ pageNumber: 1, pageSize: 5 });
       expect(result.items.length).toBe(5);
       expect(result.total).toBe(7);
       expect(result.page).toBe(1);
@@ -306,7 +306,7 @@ describe('Role & Dynamic RBAC Service Unit Tests', () => {
     });
 
     it('should filter roles by roleName', async () => {
-      const result = await getRolesService({ page: 1, limit: 10, roleName: 'Space' });
+      const result = await getRolesService({ pageNumber: 1, pageSize: 10, roleName: 'Space' });
       expect(result.items.length).toBe(4);
       expect(result.items.every((r) => r.roleName.includes('Space'))).toBe(true);
     });
@@ -415,7 +415,7 @@ describe('Role & Dynamic RBAC Service Unit Tests', () => {
 
   describe('getPermissionsService', () => {
     it('should return paginated permissions list with category metadata', async () => {
-      const result = await getPermissionsService({ page: 1, limit: 10 });
+      const result = await getPermissionsService({ pageNumber: 1, pageSize: 10 });
       expect(result.items.length).toBe(7);
       expect(result.total).toBe(7);
 
@@ -425,7 +425,7 @@ describe('Role & Dynamic RBAC Service Unit Tests', () => {
     });
 
     it('should filter permissions by search term', async () => {
-      const result = await getPermissionsService({ page: 1, limit: 10, search: 'Space' });
+      const result = await getPermissionsService({ pageNumber: 1, pageSize: 10, search: 'Space' });
       expect(result.items.length).toBe(2);
       expect(result.items.every((p) => p.permissionName.includes('Space'))).toBe(true);
     });

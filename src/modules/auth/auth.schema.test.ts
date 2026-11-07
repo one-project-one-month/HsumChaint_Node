@@ -74,3 +74,15 @@ describe('public registration roles (current system state: 1=Monk, 2=Donor, 3=Ad
     }
   });
 });
+
+it('retains required-field messages for refresh requests with Zod v4', () => {
+  for (const field of ['userId', 'refreshToken']) {
+    const body: Record<string, unknown> = { userId: 2, refreshToken: 'sample-token' };
+    delete body[field];
+    const parsed = refreshTokenSchema.safeParse({ body });
+    expect(parsed.success).toBe(false);
+    if (!parsed.success) {
+      expect(parsed.error.issues[0]?.message).toBe(`${field} is required`);
+    }
+  }
+});

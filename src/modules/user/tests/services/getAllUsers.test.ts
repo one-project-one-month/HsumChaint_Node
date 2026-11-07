@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, mock, spyOn } from 'bun:test';
 import type { User } from 'prisma-client';
 import { prisma } from '@/lib/prisma';
+import { getAllUsersSchema } from '../../user.schema';
 import { getAllUserService } from '../../user.service';
 
 /**
@@ -102,7 +103,9 @@ describe('getAllUserService Unit Test (Mocking)', () => {
     findManyMock.mockResolvedValue(mockUsers.slice(0, 2) as unknown as User[]); // fake: DB returns first 2
     countMock.mockResolvedValue(3); // fake: total in DB is 3
 
-    const result = await getAllUserService({ page: 1, limit: 2 });
+    const result = await getAllUserService(
+      getAllUsersSchema.parse({ query: { page: 1, limit: 2 } }).query
+    );
 
     expect(result.users.length).toBe(2);
     expect(result.totals).toBe(3);
@@ -114,11 +117,15 @@ describe('getAllUserService Unit Test (Mocking)', () => {
     findManyMock.mockResolvedValue([mockUsers[0]] as unknown as User[]); // fake: DB matched only apple_donor
     countMock.mockResolvedValue(1);
 
-    const result = await getAllUserService({
-      page: 1,
-      limit: 10,
-      name: 'app', // partial match for "apple_donor"
-    });
+    const result = await getAllUserService(
+      getAllUsersSchema.parse({
+        query: {
+          page: 1,
+          limit: 10,
+          name: 'app', // partial match for "apple_donor"
+        },
+      }).query
+    );
 
     expect(result.users[0].name).toBe('apple_donor');
     expect(result.totals).toBe(1);
@@ -130,11 +137,15 @@ describe('getAllUserService Unit Test (Mocking)', () => {
     findManyMock.mockResolvedValue([mockUsers[1]] as unknown as User[]); // fake: DB matched only banana_monk
     countMock.mockResolvedValue(1);
 
-    const result = await getAllUserService({
-      page: 1,
-      limit: 1,
-      monasteryName: 'Su Taung', // partial match for "Su Taung Pyae"
-    });
+    const result = await getAllUserService(
+      getAllUsersSchema.parse({
+        query: {
+          page: 1,
+          limit: 1,
+          monasteryName: 'Su Taung', // partial match for "Su Taung Pyae"
+        },
+      }).query
+    );
 
     expect(result.users[0].name).toBe('banana_monk');
     expect(result.totals).toBe(1);
@@ -149,7 +160,9 @@ describe('getAllUserService Unit Test (Mocking)', () => {
     findManyMock.mockResolvedValue(remainingUsers as unknown as User[]);
     countMock.mockResolvedValue(2);
 
-    const result = await getAllUserService({ page: 1, limit: 10 });
+    const result = await getAllUserService(
+      getAllUsersSchema.parse({ query: { page: 1, limit: 10 } }).query
+    );
 
     expect(result.users.find((u: { phone: string }) => u.phone === '09111111111')).toBeUndefined();
     expect(result.users.length).toBe(2);
@@ -161,11 +174,15 @@ describe('getAllUserService Unit Test (Mocking)', () => {
     findManyMock.mockResolvedValue([]); // fake: DB found nothing
     countMock.mockResolvedValue(0);
 
-    const result = await getAllUserService({
-      page: 1,
-      limit: 10,
-      name: 'non_existent',
-    });
+    const result = await getAllUserService(
+      getAllUsersSchema.parse({
+        query: {
+          page: 1,
+          limit: 10,
+          name: 'non_existent',
+        },
+      }).query
+    );
 
     expect(result.users.length).toBe(0);
     expect(result.totals).toBe(0);
@@ -177,11 +194,15 @@ describe('getAllUserService Unit Test (Mocking)', () => {
     findManyMock.mockResolvedValue([mockUsers[0]] as unknown as User[]); // fake: DB matched apple_donor
     countMock.mockResolvedValue(1);
 
-    const result = await getAllUserService({
-      page: 1,
-      limit: 10,
-      phone: '09111', // partial match for "09111111111"
-    });
+    const result = await getAllUserService(
+      getAllUsersSchema.parse({
+        query: {
+          page: 1,
+          limit: 10,
+          phone: '09111', // partial match for "09111111111"
+        },
+      }).query
+    );
 
     expect(result.users[0].phone).toBe('09111111111');
     expect(result.totals).toBe(1);
@@ -194,11 +215,15 @@ describe('getAllUserService Unit Test (Mocking)', () => {
     findManyMock.mockResolvedValue(donors as unknown as User[]);
     countMock.mockResolvedValue(2);
 
-    const result = await getAllUserService({
-      page: 1,
-      limit: 10,
-      roleId: 2,
-    });
+    const result = await getAllUserService(
+      getAllUsersSchema.parse({
+        query: {
+          page: 1,
+          limit: 10,
+          roleId: 2,
+        },
+      }).query
+    );
 
     expect(result.users.length).toBe(2);
     expect(result.users.every((u: { roleId: number }) => u.roleId === 2)).toBe(true);
@@ -211,7 +236,9 @@ describe('getAllUserService Unit Test (Mocking)', () => {
     findManyMock.mockResolvedValue([mockUsers[2]] as unknown as User[]); // fake: DB returns only cherry_donor
     countMock.mockResolvedValue(3); // fake: 3 total users exist
 
-    const result = await getAllUserService({ page: 2, limit: 2 });
+    const result = await getAllUserService(
+      getAllUsersSchema.parse({ query: { page: 2, limit: 2 } }).query
+    );
 
     expect(result.users.length).toBe(1);
     expect(result.totals).toBe(3);
