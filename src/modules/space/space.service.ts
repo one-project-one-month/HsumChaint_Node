@@ -1,7 +1,9 @@
 import type { Prisma } from 'prisma-client';
+import { sendPush } from '@/lib/firebase';
 import { prisma } from '@/lib/prisma';
 import { getSpaceRolePermissions } from '@/middlewares/permissionMiddleware';
 import { AppError } from '@/utils/AppError';
+import { logger } from '@/utils/logger';
 import { type FormattedPermission, formatPermission } from '../role/role.service';
 import { SPACE_PERMISSIONS, SPACE_ROLE_NAMES, SPACE_ROLES } from './space.permissions';
 import type {
@@ -131,7 +133,15 @@ export const canManageMonastery = async (
       spacePermission: {
         isDeleted: false,
         name: {
-          in: ['Space.Update', 'Space.Member.Manage', 'Space.Member.Invite', 'Space.Role.Manage'],
+          in: [
+            'Space.Update',
+            'Space.Member.Manage',
+            'Space.Member.Invite',
+            'Space.Role.Manage',
+            'Space.InviteMember',
+            'Space.UpdateMemberRole',
+            'Space.RemoveMember',
+          ],
         },
       },
     },
@@ -1045,14 +1055,14 @@ export const inviteMemberService = async (
     where: {
       monasterySpaceId,
       invitedUserId: invitedUser.id,
-      status: 0, // Pending
+      status: { in: [0, 1] }, // Pending
     },
   });
   if (existingInvitation) {
     throw new AppError('User already has a pending invitation.', 400);
   }
 
-  return await prisma.$transaction(async (tx) => {
+  const result = await prisma.$transaction(async (tx) => {
     const invitation = await tx.invitation.create({
       data: {
         monasterySpaceId,
@@ -1086,22 +1096,44 @@ export const inviteMemberService = async (
       createdAt: invitation.createdAt,
     };
   });
+
+  if (invitedUser.fcmToken) {
+    try {
+      await sendPush(
+        invitedUser.fcmToken,
+        'You have a new monastery invitation.',
+        {
+          type: '1',
+          invitationId: String(result.invitationId),
+          monasterySpaceId: String(monasterySpaceId),
+        },
+        'Monastery Invitation'
+      );
+    } catch (error) {
+      logger.error(
+        { error, userId: invitedUser.id },
+        'Push notification failed for space invitation'
+      );
+    }
+  }
+
+  return result;
 };
 
 /**
- * Respond to Invitation (matching C# RespondToInvitation)
+ * Respond to Invitation (matching C# RespondToInvitation: Accept = status 2, Reject = status 3)
  */
 export const respondToInvitationService = async (
   currentUserId: number,
   invitationId: number,
   request: RespondInvitationInput
 ): Promise<InvitationResponseDto> => {
-  const isAccept = request.status === 1;
-  const isReject = request.status === 0 || request.status === 2;
+  const isAccept = request.status === 2 || (request.status as number) === 1;
+  const isReject = request.status === 3 || (request.status as number) === 0;
   if (!isAccept && !isReject) {
-    throw new AppError('Invitation response must be Accept or Reject.', 400);
+    throw new AppError('Invitation response must be Accept (2) or Reject (3).', 400);
   }
-  const resolvedStatus = isAccept ? 1 : 2;
+  const resolvedStatus = isAccept ? 2 : 3;
 
   const invitation = await prisma.invitation.findUnique({
     where: { id: invitationId },
@@ -1115,7 +1147,7 @@ export const respondToInvitationService = async (
     throw new AppError('User is not authorized to respond to this invitation.', 403);
   }
 
-  if (invitation.status !== 0) {
+  if (invitation.status !== 0 && invitation.status !== 1) {
     throw new AppError('Invitation has already been answered.', 400);
   }
 
@@ -1125,7 +1157,7 @@ export const respondToInvitationService = async (
       where: { id: invitation.spaceRoleId, isDeleted: false },
     }));
 
-  if (resolvedStatus === 1) {
+  if (resolvedStatus === 2) {
     // Accept
     if (!spaceRole || spaceRole.isDeleted) {
       throw new AppError('Invitation role is inactive or not found.', 400);
@@ -1162,7 +1194,7 @@ export const respondToInvitationService = async (
     status: updated.status,
     createdAt: updated.createdAt,
     message:
-      resolvedStatus === 1
+      resolvedStatus === 2
         ? 'Invitation accepted successfully.'
         : 'Invitation rejected successfully.',
   };

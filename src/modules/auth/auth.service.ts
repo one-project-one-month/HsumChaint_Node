@@ -4,14 +4,31 @@ import type { Prisma } from 'prisma-client';
 import { env } from '@/config/env';
 import { createAuthSession } from '@/helper/createAuthSession';
 import { redis } from '@/lib/redis';
+import { getRolePermissions } from '@/middlewares/permissionMiddleware';
 import { clearUserListCache } from '@/utils/cache.util';
 import type { TokenPayload } from '@/utils/jwt';
 import { prisma } from '../../lib/prisma';
 import { AppError } from '../../utils/AppError';
 import type { LoginInput, RegisterInput, resetPasswordInput } from './auth.schema';
-//register
+
+// register
 export const registerUser = async (data: RegisterInput) => {
-  const conditions: Prisma.UserWhereInput[] = [{ phone: data.phone }];
+  // Reject registering as protected role (e.g. Admin, roleId: 3)
+  if (data.roleId === 3) {
+    throw new AppError('Forbidden', 403);
+  }
+
+  // Reject donor attempting to add monastery details
+  if (
+    data.roleId === 2 &&
+    ((data.monasteryName && data.monasteryName.trim() !== '') ||
+      (data.monasteryAddress && data.monasteryAddress.trim() !== ''))
+  ) {
+    throw new AppError('Donors cannot have monastery name or monastery address', 400);
+  }
+
+  const phone = data.phone;
+  const conditions: Prisma.UserWhereInput[] = [{ phone }];
   if (data.email) {
     conditions.push({ email: data.email });
   }
@@ -22,7 +39,7 @@ export const registerUser = async (data: RegisterInput) => {
     },
   });
   if (existingUser) {
-    throw new AppError('User already exists', 400);
+    throw new AppError('Phone number already exists.', 400);
   }
   if (data.contactPhone) {
     const existingContactPhone = await prisma.user.findFirst({
@@ -32,11 +49,17 @@ export const registerUser = async (data: RegisterInput) => {
       throw new AppError('Contact phone already used', 400);
     }
   }
+
+  // Role ID 1 is Monk in current system state
+  if (data.roleId === 1 && (!data.monasteryName || !data.monasteryAddress)) {
+    throw new AppError('Monastery name and address are required for Monk users', 400);
+  }
+
   const hashedPassword = await Bun.password.hash(data.password);
   const result = await prisma.$transaction(async (tx) => {
     const user = await tx.user.create({
       data: {
-        phone: data.phone,
+        phone,
         name: data.name,
         email: data.email,
         password: hashedPassword,
@@ -55,12 +78,9 @@ export const registerUser = async (data: RegisterInput) => {
         avatar: true,
       },
     });
+
     let monkProfile = null;
-    //if the use is Monk create monk profile
-    if (user.roleId === 1) {
-      if (!data.monasteryName || !data.monasteryAddress) {
-        throw new AppError('Monastery name and address are required for Monk users', 400);
-      }
+    if (data.roleId === 1 && data.monasteryName && data.monasteryAddress) {
       monkProfile = await tx.monkProfile.create({
         data: {
           userId: user.id,
@@ -69,12 +89,19 @@ export const registerUser = async (data: RegisterInput) => {
         },
       });
     }
-    //create tokens for auto login after register
+
     const { accessToken, refreshToken } = await createAuthSession(tx, user.id, user.roleId);
     return { accessToken, refreshToken, user, monkProfile };
   });
-  // Warm the /me cache immediately after register —
-  // user is auto-logged in, their next request will be GET /me
+
+  const permissions = await getRolePermissions(result.user.roleId);
+  const role = await prisma.role.findUnique({
+    where: { id: result.user.roleId },
+    select: { id: true, name: true },
+  });
+  const roleName = role?.name || (result.user.roleId === 1 ? 'Monk' : 'Donor');
+
+  // Warm the /me cache immediately after register
   const profileData = {
     ...result.user,
     monkProfile: result.user.roleId === 1 ? result.monkProfile : null,
@@ -83,57 +110,92 @@ export const registerUser = async (data: RegisterInput) => {
     await redis.set(`user:${result.user.id}:profile`, JSON.stringify(profileData), 'EX', 3600);
   } catch (error) {
     console.error('Redis Set Register Cache Error:', error);
-    // Non-fatal — registration still succeeds
   }
   await clearUserListCache();
-  return result;
+
+  return {
+    id: result.user.id,
+    userId: result.user.id,
+    name: result.user.name,
+    phoneNumber: result.user.phone,
+    phone: result.user.phone,
+    roleId: result.user.roleId,
+    roleName,
+    accessToken: result.accessToken,
+    refreshToken: result.refreshToken,
+    token: result.accessToken,
+    permissions,
+    user: profileData,
+    monkProfile: result.monkProfile,
+  };
 };
-//login
+
+// login
 export const loginUser = async (data: LoginInput) => {
+  const phone = data.phone;
   const user = await prisma.user.findUnique({
-    where: { phone: data.phone, isDeleted: false },
-    include: { monkProfile: true }, //will be null for donor
+    where: { phone, isDeleted: false },
+    include: { monkProfile: true, role: true },
   });
   if (!user) {
-    throw new AppError('Invalid phone or password', 401);
+    throw new AppError('Phone number or password incorrect!', 400);
   }
   const isPasswordMatch = await Bun.password.verify(data.password, user.password);
   if (!isPasswordMatch) {
-    throw new AppError('Invalid phone or password', 401);
+    throw new AppError('Phone number or password incorrect!', 400);
   }
+
   const { accessToken, refreshToken } = await createAuthSession(prisma, user.id, user.roleId);
+  const permissions = await getRolePermissions(user.roleId);
+  const roleName =
+    user.role?.name || (user.roleId === 1 ? 'Monk' : user.roleId === 2 ? 'Donor' : 'Admin');
+
   // Warm the /me cache so the first authenticated request is free
   const profileCacheKey = `user:${user.id}:profile`;
   const profileData = {
     id: user.id,
     phone: user.phone,
+    phoneNumber: user.phone,
     name: user.name,
     email: user.email,
     roleId: user.roleId,
     contactPhone: user.contactPhone,
     avatar: user.avatar,
     createdAt: user.createdAt,
-    //if the user is Monk, return the monkProfile
-    monkProfile: user.roleId === 1 ? user.monkProfile : null,
+    monkProfile: user.monkProfile,
   };
   try {
     await redis.set(profileCacheKey, JSON.stringify(profileData), 'EX', 3600);
   } catch (error) {
     console.error('Redis Set Login Cache Error:', error);
   }
+
+  // Exact .NET response contract
   return {
+    id: user.id,
+    roleId: user.roleId,
+    roleName,
+    permissions,
     accessToken,
     refreshToken,
-    user: profileData,
   };
 };
-//refresh token
-export const refreshTokenService = async (refreshToken: string) => {
+
+// refresh token
+export const refreshTokenService = async (refreshToken: string, expectedUserId?: number) => {
   let payload: TokenPayload;
   try {
     payload = jwt.verify(refreshToken, env.JWT_REFRESH_TOKEN_SECRET) as TokenPayload;
   } catch {
-    throw new AppError('Invalid or expired refresh token', 401);
+    throw new AppError('Invalid or expired Refresh Token', 400);
+  }
+
+  if (
+    expectedUserId !== undefined &&
+    !Number.isNaN(expectedUserId) &&
+    payload.userId !== expectedUserId
+  ) {
+    throw new AppError('Invalid or expired Refresh Token', 400);
   }
 
   const storedToken = await prisma.refreshToken.findFirst({
@@ -144,38 +206,52 @@ export const refreshTokenService = async (refreshToken: string) => {
     },
   });
   if (!storedToken) {
-    throw new AppError('Invalid refresh token', 401);
+    throw new AppError('Invalid or expired Refresh Token', 400);
   }
-  // Use a transaction to ensure we revoke the old and create the new session safely
+
   return await prisma.$transaction(async (tx) => {
     const user = await tx.user.findFirst({
       where: { id: payload.userId, isDeleted: false },
-      select: { roleId: true },
+      include: { role: true },
     });
-    if (!user) throw new AppError('Invalid refresh token', 401);
+    if (!user) throw new AppError('Invalid or expired Refresh Token', 400);
+
     await tx.refreshToken.update({
       where: { id: storedToken.id },
       data: { revokedAt: new Date() },
     });
-    //use the createAuthSession helper to create new (refreshToken + accessToken) session
+
     const { accessToken, refreshToken: newRefreshToken } = await createAuthSession(
       tx,
       payload.userId,
       user.roleId
     );
-    return { accessToken, refreshToken: newRefreshToken };
+
+    const permissions = await getRolePermissions(user.roleId);
+    const roleName =
+      user.role?.name || (user.roleId === 1 ? 'Monk' : user.roleId === 2 ? 'Donor' : 'Admin');
+
+    // Exact .NET response contract
+    return {
+      id: user.id,
+      roleId: user.roleId,
+      roleName,
+      permissions,
+      accessToken,
+      refreshToken: newRefreshToken,
+    };
   });
 };
-//logout
+
+// logout
 export const logoutUser = async (refreshToken: string) => {
   let payload: TokenPayload;
-  //decodes jwt and stores it in payload
   try {
     payload = jwt.verify(refreshToken, env.JWT_REFRESH_TOKEN_SECRET) as TokenPayload;
   } catch {
     throw new AppError('Invalid or expired refresh token', 401);
   }
-  //include userId check to prevent edge-case abuse
+
   const token = await prisma.refreshToken.findFirst({
     where: {
       refreshToken,
@@ -190,21 +266,31 @@ export const logoutUser = async (refreshToken: string) => {
     where: { id: token.id },
     data: { revokedAt: new Date() },
   });
-  // Clear their profile cache on logout
+
   try {
     await redis.del(`user:${payload.userId}:profile`);
   } catch (error) {
     console.error('Redis Del Logout Cache Error:', error);
   }
-  return { message: 'Logout successfully' };
+  return { message: 'Logged out successfully.' };
 };
-//forgot password handle
+
+// login mode
+export const getLoginModeService = async () => {
+  return {
+    code: 'phone_or_email',
+    requirePhoneVerification: false,
+    requireEmailVerification: true,
+  };
+};
+
+// forgot password handle
 export const forgotPasswordService = async (phone: string) => {
   const user = await prisma.user.findUnique({
     where: { phone },
   });
   if (!user) {
-    throw new AppError('User is not found', 404);
+    throw new AppError('User not found', 404);
   }
   const rawResetToken = crypto.randomBytes(32).toString('hex');
   const hashResetToken = crypto.createHash('sha256').update(rawResetToken).digest('hex');
@@ -215,9 +301,10 @@ export const forgotPasswordService = async (phone: string) => {
       expiresAt: new Date(Date.now() + 15 * 60 * 1000),
     },
   });
-  return { rawResetToken };
+  return { resetToken: rawResetToken, rawResetToken };
 };
-//reset password handle
+
+// reset password handle
 export const resetPasswordService = async (result: resetPasswordInput) => {
   const hashedToken = crypto.createHash('sha256').update(result.resetToken).digest('hex');
   const resetToken = await prisma.passwordResetToken.findUnique({
@@ -236,7 +323,7 @@ export const resetPasswordService = async (result: resetPasswordInput) => {
       where: { id: resetToken.id },
     }),
   ]);
-  // Invalidate profile cache — security-sensitive change
+
   try {
     await redis.del(`user:${resetToken.userId}:profile`);
   } catch (error) {

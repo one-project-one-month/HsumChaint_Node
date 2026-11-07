@@ -174,7 +174,7 @@ async function seedRbac() {
       });
       if (!existing) {
         await prisma.rolePermission.create({
-          data: { roleId, permissionId, isDeleted: false },
+          data: { roleId, permissionId },
         });
       }
     }
@@ -262,7 +262,7 @@ async function seedRbac() {
       });
       if (!existing) {
         await prisma.spaceRolePermission.create({
-          data: { spaceRoleId, spacePermissionId, isDeleted: false },
+          data: { spaceRoleId, spacePermissionId },
         });
       }
     }

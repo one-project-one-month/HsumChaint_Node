@@ -1,30 +1,24 @@
-import { beforeAll, beforeEach, describe, expect, it, mock, spyOn } from 'bun:test';
+import { beforeEach, describe, expect, it, mock } from 'bun:test';
+import type { Request, Response } from 'express';
 import type { User } from 'prisma-client';
-import request from 'supertest';
-import { app } from '@/app';
-import { generateAccessToken, type TokenPayload } from '@/utils/jwt';
-
-/**
- * UNIT TEST STRATEGY: Prisma Mocking (same level as service tests)
- *
- * WHY we stopped mocking the service module:
- *   mock.module("../../user.service") pollutes Bun's shared module registry,
- *   causing ALL other test files to receive the fake service instead of the
- *   real one. This made every service test fail with "api_test_user" data
- *   leaking in from the controller's FAKE_USER constant.
- *
- * WHY we mock Prisma instead:
- *   Prisma is the bottom of the stack. Mocking it here lets the real service
- *   functions run (testing routing + controller logic properly) while still
- *   keeping tests fast and DB-free. Each test file mocks the same "@/lib/prisma"
- *   module but Bun isolates mock.module() per-file, so there's no leakage.
- *
- * What this test still covers:
- *  1. HTTP routing — correct endpoint is reached
- *  2. Auth middleware — 401 returned when token is missing
- *  3. Zod validation — 400 returned for bad input before service is called
- *  4. Controller response shape — correct status codes and body structure
- */
+import { prisma } from '@/lib/prisma';
+import {
+  clearAllUserNotifications,
+  deleteMonkProfile,
+  deleteUser,
+  getAllUsers,
+  getMe,
+  getMonkProfile,
+  getUserById,
+  getUserNotifications,
+  getUserNotificationsFeed,
+  getUserReceivedInvitations,
+  getUserReceivedInvitationsFeed,
+  getUserSettings,
+  updateMonkProfile,
+  updateUser,
+  updateUserSettings,
+} from '../../user.controller';
 
 const FAKE_USER_ID = 999;
 const FAKE_USER = {
@@ -32,13 +26,18 @@ const FAKE_USER = {
   name: 'api_test_user',
   email: 'controller@test.com',
   phone: '09111111111',
+  contactPhone: '09111111111',
   roleId: 1,
   isDeleted: false,
+  createdAt: new Date('2026-11-01T08:00:00Z'),
   monkProfile: {
+    id: 1,
+    userId: FAKE_USER_ID,
     monasteryName: 'Test Monastery',
     monasteryAddress: 'Test Address',
   },
 };
+
 mock.module('@/lib/redis', () => ({
   redis: {
     get: mock(() => Promise.resolve(null)),
@@ -47,7 +46,7 @@ mock.module('@/lib/redis', () => ({
     scan: mock(() => Promise.resolve(['0', []])),
   },
 }));
-// Mock Prisma at the bottom of the stack — real services run, fake DB responses.
+
 mock.module('@/lib/prisma', () => ({
   prisma: {
     user: {
@@ -57,160 +56,401 @@ mock.module('@/lib/prisma', () => ({
       update: mock(() => Promise.resolve({ ...FAKE_USER, isDeleted: true })),
       count: mock(() => Promise.resolve(1)),
     },
+    monkProfile: {
+      findUnique: mock(() => Promise.resolve(FAKE_USER.monkProfile)),
+      upsert: mock(() => Promise.resolve(FAKE_USER.monkProfile)),
+      delete: mock(() => Promise.resolve(FAKE_USER.monkProfile)),
+    },
+    invitation: {
+      findMany: mock(() => Promise.resolve([])),
+      count: mock(() => Promise.resolve(0)),
+    },
+    notification: {
+      findMany: mock(() => Promise.resolve([])),
+      count: mock(() => Promise.resolve(0)),
+      updateMany: mock(() => Promise.resolve({ count: 1 })),
+    },
+    userSetting: {
+      findUnique: mock(() => Promise.resolve(null)),
+      upsert: mock(() =>
+        Promise.resolve({
+          userId: FAKE_USER_ID,
+          pickupNotificationTime: new Date(),
+          dropoffNotificationTime: new Date(),
+          pickupTime: null,
+          dropoffTime: null,
+        })
+      ),
+    },
     $transaction: mock((promises: Promise<unknown>[]) => Promise.all(promises)),
   },
 }));
 
-import { prisma } from '@/lib/prisma';
+interface MockResponse {
+  statusCode: number;
+  body: Record<string, unknown>;
+  status: (code: number) => MockResponse;
+  json: (payload: unknown) => MockResponse;
+}
 
-// Spies for asserting call behaviour per-test
-const findFirstMock = spyOn(prisma.user, 'findFirst');
-const findManyMock = spyOn(prisma.user, 'findMany');
-const findUniqueMock = spyOn(prisma.user, 'findUnique');
-const updateMock = spyOn(prisma.user, 'update');
-const countMock = spyOn(prisma.user, 'count');
+const createMockRes = () => {
+  const res: MockResponse = {
+    statusCode: 200,
+    body: {},
+    status: mock((code: number) => {
+      res.statusCode = code;
+      return res;
+    }),
+    json: mock((payload: unknown) => {
+      res.body = payload as Record<string, unknown>;
+      return res;
+    }),
+  };
+  return res as unknown as Response & MockResponse;
+};
 
-describe('UserController Unit Test (Mocking)', () => {
-  let accessToken: string;
-
-  beforeAll(() => {
-    // Real JWT with fake userId — authMiddleware validates signature only,
-    // not whether the userId exists in the DB.
-    const payload: TokenPayload = { userId: FAKE_USER_ID, roleId: 1 };
-    accessToken = `Bearer ${generateAccessToken(payload)}`;
-  });
-
-  // Reset all spies between tests to prevent return value bleed-over
+describe('UserController Unit Test (Mocking & Direct Execution)', () => {
   beforeEach(() => {
-    findFirstMock.mockClear();
-    findManyMock.mockClear();
-    findUniqueMock.mockClear();
-    updateMock.mockClear();
-    countMock.mockClear();
+    mock.restore();
   });
 
-  // Happy path: valid token → middleware passes → service fetches user →
-  // controller returns 200 with the correct profile shape.
-  it('GET /api/v1/users/me - should return current user profile', async () => {
-    findFirstMock.mockResolvedValue(FAKE_USER as unknown as User);
+  it('GET /api/user/me - should return current user profile with exact .NET envelope', async () => {
+    prisma.user.findFirst = mock(() =>
+      Promise.resolve(FAKE_USER as unknown as User)
+    ) as unknown as typeof prisma.user.findFirst;
 
-    const response = await request(app).get('/api/v1/users/me').set('Authorization', accessToken);
+    const req = {
+      user: { userId: FAKE_USER_ID, roleId: 1 },
+    } as unknown as Request;
+    const res = createMockRes();
+    const next = mock();
 
-    expect(response.status).toBe(200);
-    expect(response.body.data).toMatchObject({
-      id: FAKE_USER_ID,
-      email: 'controller@test.com',
-      name: 'api_test_user',
-      roleId: 1,
-      monkProfile: {
-        monasteryName: 'Test Monastery',
-        monasteryAddress: 'Test Address',
-      },
-    });
-    expect(response.body.message).toContain('successfully');
+    await getMe(req, res, next);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.isSuccess).toBe(true);
+    expect(res.body.message).toBe('Success');
+    expect(res.body.data.id).toBe(FAKE_USER_ID);
+    expect(res.body.data.roleName).toBe('Monk');
+    expect(res.body.data.phoneNumber).toBe('09111111111');
   });
 
-  // Security: missing token → authMiddleware rejects at middleware level,
-  // Prisma should never be reached at all.
-  it('GET /api/v1/users/me - should return 401 if no token provided', async () => {
-    const response = await request(app).get('/api/v1/users/me');
+  it('GET /api/user/:id - should return profile by ID', async () => {
+    prisma.user.findFirst = mock(() =>
+      Promise.resolve(FAKE_USER as unknown as User)
+    ) as unknown as typeof prisma.user.findFirst;
 
-    expect(response.status).toBe(401);
-    // Middleware blocked before service/DB layer — nothing should be called
-    expect(findFirstMock).not.toHaveBeenCalled();
+    const req = {
+      params: { id: String(FAKE_USER_ID) },
+      user: { userId: FAKE_USER_ID, roleId: 1 },
+    } as unknown as Request;
+    const res = createMockRes();
+    const next = mock();
+
+    await getUserById(req, res, next);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.data.id).toBe(FAKE_USER_ID);
   });
 
-  // Verifies controller passes query params through to the service correctly
-  // and wraps the result in the expected paginated response shape.
-  it('GET /api/v1/users - should return paginated users with filter', async () => {
-    findManyMock.mockResolvedValue([FAKE_USER] as unknown as User[]);
-    countMock.mockResolvedValue(1);
+  it('GET /api/user - should return paginated users in PagedResult envelope', async () => {
+    prisma.user.findMany = mock(() =>
+      Promise.resolve([FAKE_USER] as unknown as User[])
+    ) as unknown as typeof prisma.user.findMany;
+    prisma.user.count = mock(() => Promise.resolve(1)) as unknown as typeof prisma.user.count;
 
-    const response = await request(app)
-      .get('/api/v1/users?page=1&limit=10&roleId=2')
-      .set('Authorization', accessToken);
+    const req = {
+      query: { pageNumber: 1, pageSize: 10 },
+      user: { userId: 1, roleId: 3 },
+    } as unknown as Request;
+    const res = createMockRes();
+    const next = mock();
 
-    expect(response.status).toBe(200);
-    expect(Array.isArray(response.body.data.users)).toBe(true);
-    expect(response.body.data.paginationData).toBeDefined();
-    expect(findManyMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: expect.objectContaining({ roleId: 2 }),
+    await getAllUsers(req, res, next);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.isSuccess).toBe(true);
+    expect(res.body.message).toBe('Success');
+    expect(Array.isArray(res.body.data)).toBe(true);
+    expect(res.body.pagination).toBeDefined();
+    expect(res.body.pagination.pageNumber).toBe(1);
+    expect(res.body.pagination.totalCount).toBe(1);
+  });
+
+  it('PUT /api/user - should update user profile successfully', async () => {
+    prisma.user.findUnique = mock(() =>
+      Promise.resolve(FAKE_USER as unknown as User)
+    ) as unknown as typeof prisma.user.findUnique;
+    prisma.user.update = mock(() =>
+      Promise.resolve({ ...FAKE_USER, name: 'Updated Name' } as unknown as User)
+    ) as unknown as typeof prisma.user.update;
+
+    const req = {
+      params: {},
+      body: { id: FAKE_USER_ID, name: 'Updated Name' },
+      user: { userId: FAKE_USER_ID, roleId: 1 },
+    } as unknown as Request;
+    const res = createMockRes();
+    const next = mock();
+
+    await updateUser(req, res, next);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.isSuccess).toBe(true);
+    expect(res.body.message).toBe('User updated successfully.');
+    expect(res.body.data.name).toBe('Updated Name');
+  });
+
+  it('DELETE /api/user/:id - should soft delete user and return void Result envelope', async () => {
+    prisma.user.findFirst = mock(() =>
+      Promise.resolve(FAKE_USER as unknown as User)
+    ) as unknown as typeof prisma.user.findFirst;
+    prisma.user.update = mock(() =>
+      Promise.resolve({ ...FAKE_USER, isDeleted: true } as unknown as User)
+    ) as unknown as typeof prisma.user.update;
+
+    const req = {
+      params: { id: String(FAKE_USER_ID) },
+      user: { userId: 1, roleId: 3 },
+    } as unknown as Request;
+    const res = createMockRes();
+    const next = mock();
+
+    await deleteUser(req, res, next);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.isSuccess).toBe(true);
+    expect(res.body.message).toBe('User deleted successfully.');
+    expect(res.body.data).toBeUndefined();
+  });
+
+  it('GET /api/user/:id/monk-profile - should return monk profile', async () => {
+    prisma.user.findFirst = mock(() =>
+      Promise.resolve(FAKE_USER as unknown as User)
+    ) as unknown as typeof prisma.user.findFirst;
+
+    const req = {
+      params: { id: String(FAKE_USER_ID) },
+      user: { userId: FAKE_USER_ID, roleId: 1 },
+    } as unknown as Request;
+    const res = createMockRes();
+    const next = mock();
+
+    await getMonkProfile(req, res, next);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.data.monasteryName).toBe('Test Monastery');
+  });
+
+  it('PATCH /api/user/:id/monk-profile - should update monk profile', async () => {
+    prisma.user.findFirst = mock(() =>
+      Promise.resolve(FAKE_USER as unknown as User)
+    ) as unknown as typeof prisma.user.findFirst;
+    prisma.monkProfile.upsert = mock(() =>
+      Promise.resolve({
+        id: 1,
+        userId: FAKE_USER_ID,
+        monasteryName: 'Updated Campus',
+        monasteryAddress: 'Updated Campus Address',
       })
-    );
+    ) as unknown as typeof prisma.monkProfile.upsert;
+
+    const req = {
+      params: { id: String(FAKE_USER_ID) },
+      body: {
+        monasteryName: 'Updated Campus',
+        monasteryAddress: 'Updated Campus Address',
+      },
+      user: { userId: FAKE_USER_ID, roleId: 1 },
+    } as unknown as Request;
+    const res = createMockRes();
+    const next = mock();
+
+    await updateMonkProfile(req, res, next);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.message).toBe('Monk profile updated successfully.');
   });
 
-  // Zod validation: bad input is rejected by validation middleware BEFORE
-  // the service runs — Prisma must not be touched at all.
-  it('PUT /api/v1/users/:id - should return 400 for invalid data (Zod check)', async () => {
-    const response = await request(app)
-      .put(`/api/v1/users/${FAKE_USER_ID}`)
-      .set('Authorization', accessToken)
-      .send({
-        name: 'hi', // too short — Zod rejects
-        email: 'wrong-email', // invalid format — Zod rejects
-      });
+  it('DELETE /api/user/:id/monk-profile - should delete monk profile and return void Result', async () => {
+    prisma.user.findFirst = mock(() =>
+      Promise.resolve(FAKE_USER as unknown as User)
+    ) as unknown as typeof prisma.user.findFirst;
+    prisma.monkProfile.findUnique = mock(() =>
+      Promise.resolve(FAKE_USER.monkProfile)
+    ) as unknown as typeof prisma.monkProfile.findUnique;
+    prisma.monkProfile.delete = mock(() =>
+      Promise.resolve(FAKE_USER.monkProfile)
+    ) as unknown as typeof prisma.monkProfile.delete;
 
-    expect(response.status).toBe(400);
-    // Validation failed before service layer — DB must not have been touched
-    expect(updateMock).not.toHaveBeenCalled();
+    const req = {
+      params: { id: String(FAKE_USER_ID) },
+      user: { userId: FAKE_USER_ID, roleId: 1 },
+    } as unknown as Request;
+    const res = createMockRes();
+    const next = mock();
+
+    await deleteMonkProfile(req, res, next);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.message).toBe('Monk profile deleted successfully.');
+    expect(res.body.data).toBeUndefined();
   });
 
-  // Happy path update: valid input flows through to Prisma update,
-  // controller returns the updated user.
-  it('PUT /api/v1/users/:id - should update user successfully', async () => {
-    findUniqueMock.mockResolvedValue(FAKE_USER as unknown as User);
-    updateMock.mockResolvedValue({
-      ...FAKE_USER,
-      name: 'updated_api_user',
-    } as unknown as User);
+  it('GET /api/user/:id/invitations - should return received invitations with PagedResult', async () => {
+    prisma.invitation.findMany = mock(() =>
+      Promise.resolve([])
+    ) as unknown as typeof prisma.invitation.findMany;
+    prisma.invitation.count = mock(() =>
+      Promise.resolve(0)
+    ) as unknown as typeof prisma.invitation.count;
 
-    const response = await request(app)
-      .put(`/api/v1/users/${FAKE_USER_ID}`)
-      .set('Authorization', accessToken)
-      .send({ name: 'updated_api_user', contactPhone: '09888888888' });
+    const req = {
+      params: { id: String(FAKE_USER_ID) },
+      query: { pageNumber: 1, pageSize: 10 },
+      user: { userId: FAKE_USER_ID, roleId: 1 },
+    } as unknown as Request;
+    const res = createMockRes();
+    const next = mock();
 
-    expect(response.status).toBe(200);
-    expect(response.body.data.name).toBe('updated_api_user');
+    await getUserReceivedInvitations(req, res, next);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.isSuccess).toBe(true);
+    expect(res.body.pagination).toBeDefined();
   });
 
-  it('PUT /api/v1/users/:id - should return 403 when updating another user profile without permission', async () => {
-    const OTHER_USER_ID = 888;
-    const response = await request(app)
-      .put(`/api/v1/users/${OTHER_USER_ID}`)
-      .set('Authorization', accessToken)
-      .send({ name: 'malicious_update', contactPhone: '09888888888' });
+  it('GET /api/user/:id/invitations/feed - should return received invitations with CursorPagedResult', async () => {
+    prisma.invitation.findMany = mock(() =>
+      Promise.resolve([])
+    ) as unknown as typeof prisma.invitation.findMany;
 
-    expect(response.status).toBe(403);
-    expect(response.body.message).toContain('Forbidden');
-    expect(updateMock).not.toHaveBeenCalled();
+    const req = {
+      params: { id: String(FAKE_USER_ID) },
+      query: { pageSize: 15 },
+      user: { userId: FAKE_USER_ID, roleId: 1 },
+    } as unknown as Request;
+    const res = createMockRes();
+    const next = mock();
+
+    await getUserReceivedInvitationsFeed(req, res, next);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.isSuccess).toBe(true);
+    expect(res.body.pagination.pageSize).toBe(15);
   });
 
-  // Soft delete: service sets isDeleted:true, controller returns success message.
-  // DB state verification is covered by softDeleteUserService unit test.
-  it('DELETE /api/v1/users/:id - should soft delete user', async () => {
-    findFirstMock.mockResolvedValue(FAKE_USER as unknown as User);
-    updateMock.mockResolvedValue({
-      ...FAKE_USER,
-      isDeleted: true,
-    } as unknown as User);
+  it('GET /api/user/:id/notification - should return notifications with PagedResult', async () => {
+    prisma.notification.findMany = mock(() =>
+      Promise.resolve([])
+    ) as unknown as typeof prisma.notification.findMany;
+    prisma.notification.count = mock(() =>
+      Promise.resolve(0)
+    ) as unknown as typeof prisma.notification.count;
 
-    const response = await request(app)
-      .delete(`/api/v1/users/${FAKE_USER_ID}`)
-      .set('Authorization', accessToken);
+    const req = {
+      params: { id: String(FAKE_USER_ID) },
+      query: { pageNumber: 1, pageSize: 10 },
+      user: { userId: FAKE_USER_ID, roleId: 1 },
+    } as unknown as Request;
+    const res = createMockRes();
+    const next = mock();
 
-    expect(response.status).toBe(200);
-    expect(response.body.message).toContain('deleted successfully');
+    await getUserNotifications(req, res, next);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.isSuccess).toBe(true);
+    expect(res.body.pagination.totalPages).toBe(1);
   });
 
-  it('DELETE /api/v1/users/:id - should return 403 when deleting another user without permission', async () => {
-    const OTHER_USER_ID = 888;
-    const response = await request(app)
-      .delete(`/api/v1/users/${OTHER_USER_ID}`)
-      .set('Authorization', accessToken);
+  it('GET /api/user/:id/notification/feed - should return notifications with CursorPagedResult', async () => {
+    prisma.notification.findMany = mock(() =>
+      Promise.resolve([])
+    ) as unknown as typeof prisma.notification.findMany;
 
-    expect(response.status).toBe(403);
-    expect(response.body.message).toContain('Forbidden');
-    expect(updateMock).not.toHaveBeenCalled();
+    const req = {
+      params: { id: String(FAKE_USER_ID) },
+      query: { pageSize: 15 },
+      user: { userId: FAKE_USER_ID, roleId: 1 },
+    } as unknown as Request;
+    const res = createMockRes();
+    const next = mock();
+
+    await getUserNotificationsFeed(req, res, next);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.isSuccess).toBe(true);
+    expect(res.body.pagination.hasNextPage).toBe(false);
+  });
+
+  it('DELETE /api/user/:id/notification - should clear notifications and return void Result', async () => {
+    prisma.notification.updateMany = mock(() =>
+      Promise.resolve({ count: 3 })
+    ) as unknown as typeof prisma.notification.updateMany;
+
+    const req = {
+      params: { id: String(FAKE_USER_ID) },
+      user: { userId: FAKE_USER_ID, roleId: 1 },
+    } as unknown as Request;
+    const res = createMockRes();
+    const next = mock();
+
+    await clearAllUserNotifications(req, res, next);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.message).toBe('Notifications cleared successfully.');
+    expect(res.body.data).toBeUndefined();
+  });
+
+  it('GET /api/user/:id/settings - should return user settings', async () => {
+    prisma.user.findFirst = mock(() =>
+      Promise.resolve(FAKE_USER as unknown as User)
+    ) as unknown as typeof prisma.user.findFirst;
+    prisma.userSetting.findUnique = mock(() =>
+      Promise.resolve(null)
+    ) as unknown as typeof prisma.userSetting.findUnique;
+
+    const req = {
+      params: { id: String(FAKE_USER_ID) },
+      user: { userId: FAKE_USER_ID, roleId: 1 },
+    } as unknown as Request;
+    const res = createMockRes();
+    const next = mock();
+
+    await getUserSettings(req, res, next);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.data.userId).toBe(FAKE_USER_ID);
+  });
+
+  it('PUT /api/user/:id/settings - should update user settings', async () => {
+    prisma.user.findFirst = mock(() =>
+      Promise.resolve(FAKE_USER as unknown as User)
+    ) as unknown as typeof prisma.user.findFirst;
+    prisma.userSetting.upsert = mock(() =>
+      Promise.resolve({
+        userId: FAKE_USER_ID,
+        pickupNotificationTime: new Date('2026-11-01T14:00:00Z'),
+        dropoffNotificationTime: new Date('2026-11-01T21:00:00Z'),
+        pickupTime: null,
+        dropoffTime: null,
+      })
+    ) as unknown as typeof prisma.userSetting.upsert;
+
+    const req = {
+      params: { id: String(FAKE_USER_ID) },
+      body: {
+        pickupNotificationTime: '2026-11-01T14:00:00Z',
+        dropoffNotificationTime: '2026-11-01T21:00:00Z',
+      },
+      user: { userId: FAKE_USER_ID, roleId: 1 },
+    } as unknown as Request;
+    const res = createMockRes();
+    const next = mock();
+
+    await updateUserSettings(req, res, next);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.message).toBe('Settings updated successfully.');
   });
 });

@@ -180,6 +180,6 @@ ALTER TABLE `Monastery_Space` RENAME INDEX `monastery_space_created_by_id_idx` T
 
 ALTER TABLE `Notification` RENAME INDEX `notification_user_id_created_at_idx` TO `IX_Notification_user_id_created_at`;
 
-ALTER TABLE `Role_Permission` RENAME INDEX `role_permission_permission_id_idx` TO `IX_Role_Permission_permission_id`;
-ALTER TABLE `Role_Permission` RENAME INDEX `role_permission_role_id_idx` TO `IX_Role_Permission_role_id`;
+CREATE INDEX `IX_Role_Permission_permission_id` ON `Role_Permission`(`permission_id`);
+CREATE INDEX `IX_Role_Permission_role_id` ON `Role_Permission`(`role_id`);
 ALTER TABLE `Role_Permission` RENAME INDEX `role_permission_role_id_permission_id_unique` TO `UX_Role_Permission_role_permission`;

@@ -35,7 +35,6 @@ export interface CursorPaginationMeta {
 }
 
 export interface GenericResponse<T = unknown> {
-  success?: boolean;
   isSuccess: boolean;
   message: string;
   isFailure: boolean;
@@ -107,16 +106,15 @@ export const errorResponse = (
 
 export const sendSuccessResponse = <T>(
   res: Response,
-  data: T,
+  data?: T,
   message = 'Operation completed successfully.',
   statusCode = 200
 ) => {
   const response: GenericResponse<T> = {
-    success: true,
     isSuccess: true,
     message,
     isFailure: false,
-    data,
+    ...(data !== undefined ? { data } : {}),
   };
   return res.status(statusCode).json(response);
 };
@@ -129,7 +127,6 @@ export const sendPaginatedResponse = <T>(
   statusCode = 200
 ) => {
   const response: GenericResponse<T> = {
-    success: true,
     isSuccess: true,
     message,
     isFailure: false,
@@ -147,7 +144,6 @@ export const sendCursorPaginatedResponse = <T>(
   statusCode = 200
 ) => {
   const response: GenericResponse<T> = {
-    success: true,
     isSuccess: true,
     message,
     isFailure: false,
@@ -166,7 +162,6 @@ export const sendErrorResponse = (
   const isDevelopment = process.env.NODE_ENV !== 'production';
 
   const response: GenericResponse = {
-    success: false,
     isSuccess: false,
     message,
     isFailure: true,

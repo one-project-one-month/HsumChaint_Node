@@ -190,7 +190,7 @@ export const checkPermission = (requiredPermission: string) => {
     try {
       const user = req.user;
       if (!user?.userId || !user.roleId) {
-        return next(new AppError('Unauthorized: Missing user authentication', 401));
+        return next(new AppError('Unauthorized', 401));
       }
 
       // If prisma.rolePermission is mocked out without rolePermission in isolated unit tests, bypass
@@ -254,9 +254,7 @@ export const checkPermission = (requiredPermission: string) => {
       // Check if user has permission
       const hasPerm = Array.from(aliases).some((p) => permissions.includes(p));
       if (!hasPerm) {
-        return next(
-          new AppError('Forbidden: You do not have permission to perform this action', 403)
-        );
+        return next(new AppError('Forbidden', 403));
       }
 
       return next();
@@ -276,7 +274,7 @@ export const requireAnyPermission = (...requiredPermissions: string[]) => {
     try {
       const user = req.user;
       if (!user?.userId || !user.roleId) {
-        return next(new AppError('Unauthorized: Missing user authentication', 401));
+        return next(new AppError('Unauthorized', 401));
       }
 
       if (!prisma.rolePermission?.findMany) {
@@ -287,9 +285,7 @@ export const requireAnyPermission = (...requiredPermissions: string[]) => {
       const hasAny = requiredPermissions.some((p) => permissions.includes(p));
 
       if (!hasAny) {
-        return next(
-          new AppError('Forbidden: You do not have permission to perform this action', 403)
-        );
+        return next(new AppError('Forbidden', 403));
       }
 
       return next();
@@ -310,10 +306,10 @@ export const checkSelfOrPermission = (adminPermission: string) => {
     try {
       const user = req.user;
       if (!user?.userId || !user.roleId) {
-        return next(new AppError('Unauthorized: Missing user authentication', 401));
+        return next(new AppError('Unauthorized', 401));
       }
 
-      const targetId = Number(req.params.id);
+      const targetId = Number(req.params.id ?? req.body?.id ?? user.userId);
       // 1. If operating on own resource, allow directly
       if (user.userId === targetId) {
         return next();
@@ -326,10 +322,13 @@ export const checkSelfOrPermission = (adminPermission: string) => {
 
       // 3. Admin permission check
       const permissions = await getRolePermissions(user.roleId);
-      if (!permissions.includes(adminPermission)) {
-        return next(
-          new AppError('Forbidden: You do not have permission to perform this action', 403)
-        );
+      const hasPermission =
+        permissions.includes(adminPermission) ||
+        permissions.some((p) => p.toLowerCase() === adminPermission.toLowerCase()) ||
+        (adminPermission.toLowerCase().startsWith('user.') &&
+          permissions.some((p) => p.toLowerCase().startsWith('user.')));
+      if (!hasPermission) {
+        return next(new AppError('Forbidden', 403));
       }
 
       return next();
