@@ -46,15 +46,31 @@ Access control in Hsum Chaint Node is governed by two complementary layers:
 }
 ```
 
-### Standard Offset Pagination Response Envelopes
+### Standard Response Envelopes
 
-Depending on the module, paginated responses return offset metadata in either of the following structures:
+All API responses strictly utilize standardized envelopes matching the .NET specification:
 
 ```json
-// 1. Root-Level Offset Pagination Envelope (Donations Module)
+// 1. Single Object Response (Result<T>)
 {
-  "success": true,
-  "message": "Donations retrieved successfully.",
+  "isSuccess": true,
+  "message": "Success",
+  "isFailure": false,
+  "data": { ... }
+}
+
+// 2. Standard Void Response (Result)
+{
+  "isSuccess": true,
+  "message": "Operation completed successfully.",
+  "isFailure": false
+}
+
+// 3. Web Offset Pagination Response Envelope (PagedResult<T>)
+{
+  "isSuccess": true,
+  "message": "Success",
+  "isFailure": false,
   "data": [ ... ],
   "pagination": {
     "pageNumber": 1,
@@ -66,24 +82,16 @@ Depending on the module, paginated responses return offset metadata in either of
   }
 }
 
-// 2. Data-Wrapped Offset Pagination Envelope (Users & Spaces Modules)
+// 4. Mobile Cursor Keyset Pagination Response Envelope (CursorPagedResult<T>)
 {
-  "success": true,
-  "message": "Retrieved successfully.",
-  "data": {
-    "items": [ ... ],
-    "pagination": {
-      "meta": {
-        "total": 42,
-        "currentPage": 1,
-        "lastPage": 5,
-        "perPage": 10
-      },
-      "links": {
-        "next": "http://localhost:3000/api/v1/spaces?page=2&limit=10",
-        "prev": null
-      }
-    }
+  "isSuccess": true,
+  "message": "Success",
+  "isFailure": false,
+  "data": [ ... ],
+  "pagination": {
+    "nextCursor": 15,
+    "hasNextPage": true,
+    "pageSize": 15
   }
 }
 ```
@@ -100,13 +108,22 @@ Depending on the module, paginated responses return offset metadata in either of
 | `POST` | `/api/v1/auth/logout` | Auth | None (Public) | Authenticated |
 | `POST` | `/api/v1/auth/forgot-password` | Auth | None (Public) | All |
 | `POST` | `/api/v1/auth/reset-password` | Auth | None (Public) | All |
-| `GET` | `/api/v1/users` | Users | Authenticated | System Admin, Authenticated |
-| `GET` | `/api/v1/users/me` | Users | Authenticated | All (Self) |
-| `GET` | `/api/v1/users/:id` | Users | Authenticated | All (Self), Admin |
-| `PUT` | `/api/v1/users/:id` | Users | Self or `User.Update` | All (Self), Admin |
-| `DELETE` | `/api/v1/users/:id` | Users | Self or `User.Delete` | All (Self), Admin |
-| `GET` | `/api/v1/user-settings/me` | User Settings | Authenticated | All (Self) |
-| `PUT` | `/api/v1/user-settings/me` | User Settings | Authenticated | All (Self) |
+| `GET` | `/api/user` (alias: `/api/v1/users`) | Users | `Users.View` | System Admin |
+| `GET` | `/api/user/:id` (alias: `/api/v1/users/:id`, `/api/v1/users/me`) | Users | Self or `Users.View` | All (Self), Admin |
+| `PUT` | `/api/user` (alias: `/api/v1/users`, `/api/v1/users/:id`) | Users | Self or `Users.Update` | All (Self), Admin |
+| `DELETE` | `/api/user/:id` (alias: `/api/v1/users/:id`) | Users | `Users.Manage` | System Admin |
+| `GET` | `/api/user/:id/invitations` | Users | Self or `Invitation.View` | All (Self), Admin |
+| `GET` | `/api/user/:id/invitations/feed` | Users | Self or `Invitation.View` | All (Self), Admin |
+| `GET` | `/api/user/:id/invited-by-list` | Users | Self or `Invitation.View` | All (Self), Admin |
+| `GET` | `/api/user/:id/invited-by-list/feed` | Users | Self or `Invitation.View` | All (Self), Admin |
+| `GET` | `/api/user/:id/notification` | Users | Self or `Notification.View` | All (Self), Admin |
+| `GET` | `/api/user/:id/notification/feed` | Users | Self or `Notification.View` | All (Self), Admin |
+| `DELETE` | `/api/user/:id/notification` | Users | Self or `Notification.Manage` | All (Self), Admin |
+| `GET` | `/api/user/:id/monk-profile` | Users | Self (Monk) or `Users.View` | Monk, Admin |
+| `PATCH` | `/api/user/:id/monk-profile` (alias: `PUT`) | Users | Self (Monk) or `Users.Update` | Monk, Admin |
+| `DELETE` | `/api/user/:id/monk-profile` | Users | Self (Monk) or `Users.Manage` | Monk, Admin |
+| `GET` | `/api/user/:id/settings` (alias: `/api/v1/user-settings/me`) | Users | Self or `Users.View` | All (Self), Admin |
+| `PUT` | `/api/user/:id/settings` (alias: `/api/v1/user-settings/me`) | Users | Self or `Users.Update` | All (Self), Admin |
 | `GET` | `/api/v1/spaces` | Spaces | Authenticated | All Space Members, Admin |
 | `POST` | `/api/v1/spaces` | Spaces | `Monastery.Create` | Monk, Admin |
 | `GET` | `/api/v1/spaces/:id` | Spaces | Authenticated | Space Members & Admin |
@@ -344,145 +361,454 @@ Depending on the module, paginated responses return offset metadata in either of
 
 ---
 
-### 4.2. Users Management (`/api/v1/users`)
+### 4.2. Users & Profile Management (`/api/user`, `/api/v1/users`)
 
 #### 7. Get All Users
 - **Method**: `GET`
-- **Route**: `/api/v1/users`
-- **Target User Role**: Authenticated Users, System Admin
-- **Description**: Retrieves a paginated list of active registered users. Cached via Redis for performance.
+- **Route**: `/api/user` (alias: `/api/v1/users`)
+- **Target User Role**: `System Admin`
+- **Required Permission**: `Users.View`
+- **Description**: Retrieves a paginated list of all active registered users.
 - **Query Parameters (Offset Pagination)**:
-  - `page` (int, default: 1)
-  - `limit` (int, default: 10)
-  - `search` (string, optional)
+  - `pageNumber` (int, default: 1)
+  - `pageSize` (int, default: 10)
+  - `search` / `name` (string, optional)
+  - `phoneNumber` / `phone` (string, optional)
+  - `email` (string, optional)
   - `roleId` (int, optional)
-- **Response `200 OK`**:
+- **Status Codes**: `200 OK`, `401 Unauthorized`, `403 Forbidden`
+- **Response `200 OK` (PagedResult<UserDto>)**:
 ```json
 {
-  "success": true,
-  "message": "Users retrieved successfully",
-  "data": {
-    "users": [
-      {
-        "id": 1,
-        "name": "Ashin Pannita",
-        "phone": "09123456789",
-        "email": "pannita@monastery.org",
-        "role": {
-          "id": 1,
-          "name": "Monk"
-        }
-      }
-    ],
-    "pagination": {
-      "meta": {
-        "total": 1,
-        "currentPage": 1,
-        "lastPage": 1,
-        "perPage": 10
-      },
-      "links": {
-        "next": null,
-        "prev": null
-      }
+  "isSuccess": true,
+  "message": "Success",
+  "isFailure": false,
+  "data": [
+    {
+      "id": 2,
+      "name": "U Thuzana",
+      "phoneNumber": "09100000002",
+      "roleId": 1,
+      "roleName": "Monk",
+      "email": "thuzana@monastery.org",
+      "contactPhoneNumber": "09100000002"
     }
+  ],
+  "pagination": {
+    "pageNumber": 1,
+    "pageSize": 10,
+    "totalCount": 1,
+    "totalPages": 1,
+    "hasPreviousPage": false,
+    "hasNextPage": false
   }
 }
 ```
 
 ---
 
-#### 8. Get Own Profile
+#### 8. Get User Profile by ID
 - **Method**: `GET`
-- **Route**: `/api/v1/users/me`
-- **Target User Role**: All Authenticated Users
-- **Description**: Retrieves full profile details and monk metadata for the calling user.
-- **Response `200 OK`**:
+- **Route**: `/api/user/:id` (alias: `/api/v1/users/:id`, `/api/v1/users/me`)
+- **Target User Role**: Any Authenticated User (Self) or `System Admin`
+- **Required Permission**: Self (`UserId == id`) or `Users.View`
+- **Path Parameters**:
+  - `id` (int, required): Target user ID.
+- **Status Codes**: `200 OK`, `401 Unauthorized`, `403 Forbidden`, `404 Not Found`
+- **Response `200 OK` (Result<UserDto>)**:
 ```json
 {
-  "success": true,
-  "message": "User profile retrieved successfully",
+  "isSuccess": true,
+  "message": "Success",
+  "isFailure": false,
   "data": {
-    "id": 1,
-    "name": "Ashin Pannita",
-    "phone": "09123456789",
-    "email": "pannita@monastery.org",
-    "contactPhone": "09123456789",
-    "avatar": "https://pub-r2.storage.../avatar.jpg",
+    "id": 2,
+    "name": "U Thuzana",
+    "phoneNumber": "09100000002",
     "roleId": 1,
-    "monkProfile": {
-      "monasteryName": "Mahagandhayon Monastery",
-      "monasteryAddress": "Amarapura, Mandalay"
-    }
+    "roleName": "Monk",
+    "email": "thuzana@monastery.org",
+    "contactPhoneNumber": "09100000002"
   }
 }
 ```
 
 ---
 
-#### 9. Get User Profile by ID
-- **Method**: `GET`
-- **Route**: `/api/v1/users/:id`
-- **Target User Role**: Authenticated Users, System Admin
-- **Description**: Retrieves user profile by unique user ID.
-- **Response `200 OK`**:
+#### 9. Update User Profile
+- **Method**: `PUT`
+- **Route**: `/api/user` (alias: `/api/v1/users`, `/api/v1/users/:id`)
+- **Target User Role**: Any Authenticated User (Self) or `System Admin`
+- **Required Permission**: `Users.Update`
+- **Description**: Updates profile attributes. Non-admin users cannot alter their own `roleId`; only admins can modify role assignments. Supports multipart/form-data for avatar uploads.
+- **Request Body**:
 ```json
 {
-  "success": true,
-  "message": "User retrieved successfully",
+  "id": 2,
+  "name": "U Thuzana Updated",
+  "phoneNumber": "09100000002",
+  "roleId": 1,
+  "email": "updated@monastery.org",
+  "contactPhoneNumber": "09100000002"
+}
+```
+- **Status Codes**: `200 OK`, `400 Bad Request`, `401 Unauthorized`, `403 Forbidden`
+- **Response `200 OK` (Result<UserDto>)**:
+```json
+{
+  "isSuccess": true,
+  "message": "User updated successfully.",
+  "isFailure": false,
+  "data": {
+    "id": 2,
+    "name": "U Thuzana Updated",
+    "phoneNumber": "09100000002",
+    "roleId": 1,
+    "roleName": "Monk",
+    "email": "updated@monastery.org",
+    "contactPhoneNumber": "09100000002"
+  }
+}
+```
+
+---
+
+#### 10. Soft Delete User Account
+- **Method**: `DELETE`
+- **Route**: `/api/user/:id` (alias: `/api/v1/users/:id`)
+- **Target User Role**: `System Admin`
+- **Required Permission**: `Users.Manage`
+- **Path Parameters**:
+  - `id` (int, required): Target user ID.
+- **Status Codes**: `200 OK`, `401 Unauthorized`, `403 Forbidden`, `404 Not Found`
+- **Response `200 OK` (Standard Void Result)**:
+```json
+{
+  "isSuccess": true,
+  "message": "User deleted successfully.",
+  "isFailure": false
+}
+```
+
+---
+
+#### 11. Get User's Received Invitations (Web Offset Pagination)
+- **Method**: `GET`
+- **Route**: `/api/user/:id/invitations` (alias: `/api/v1/users/:id/invitations`)
+- **Target User Role**: Self or `System Admin`
+- **Required Permission**: Self or `Invitation.View`
+- **Query Parameters**:
+  - `pageNumber` (int, default: 1)
+  - `pageSize` (int, default: 10)
+- **Status Codes**: `200 OK`, `401 Unauthorized`, `403 Forbidden`
+- **Response `200 OK` (PagedResult<InvitationDto>)**:
+```json
+{
+  "isSuccess": true,
+  "message": "Success",
+  "isFailure": false,
+  "data": [
+    {
+      "id": 5,
+      "monasterySpaceId": 1,
+      "monasterySpaceName": "Mahagandhayon Monastery",
+      "invitedUserId": 3,
+      "invitedUserName": "Daw Mya",
+      "invitedById": 2,
+      "invitedByName": "U Thuzana",
+      "spaceRoleId": 3,
+      "spaceRoleName": "Editor",
+      "status": 0,
+      "createdAt": "2026-11-01T08:00:00Z"
+    }
+  ],
+  "pagination": {
+    "pageNumber": 1,
+    "pageSize": 10,
+    "totalCount": 1,
+    "totalPages": 1,
+    "hasPreviousPage": false,
+    "hasNextPage": false
+  }
+}
+```
+
+---
+
+#### 12. Get User's Received Invitations Feed (Mobile Keyset Cursor Pagination)
+- **Method**: `GET`
+- **Route**: `/api/user/:id/invitations/feed` (alias: `/api/v1/users/:id/invitations/feed`)
+- **Target User Role**: Self or `System Admin`
+- **Required Permission**: Self or `Invitation.View`
+- **Query Parameters**:
+  - `lastId` (int, optional): ID of the last item in previous batch.
+  - `pageSize` (int, default: 15)
+- **Status Codes**: `200 OK`, `401 Unauthorized`, `403 Forbidden`
+- **Response `200 OK` (CursorPagedResult<InvitationDto>)**:
+```json
+{
+  "isSuccess": true,
+  "message": "Success",
+  "isFailure": false,
+  "data": [
+    {
+      "id": 5,
+      "monasterySpaceId": 1,
+      "monasterySpaceName": "Mahagandhayon Monastery",
+      "invitedUserId": 3,
+      "invitedUserName": "Daw Mya",
+      "invitedById": 2,
+      "invitedByName": "U Thuzana",
+      "spaceRoleId": 3,
+      "spaceRoleName": "Editor",
+      "status": 0,
+      "createdAt": "2026-11-01T08:00:00Z"
+    }
+  ],
+  "pagination": {
+    "nextCursor": 5,
+    "hasNextPage": false,
+    "pageSize": 15
+  }
+}
+```
+
+---
+
+#### 13. Get User's Sent Invitations (Web Offset Pagination)
+- **Method**: `GET`
+- **Route**: `/api/user/:id/invited-by-list` (alias: `/api/v1/users/:id/invited-by-list`)
+- **Target User Role**: Self or `System Admin`
+- **Required Permission**: Self or `Invitation.View`
+- **Query Parameters**: `pageNumber` (int, default: 1), `pageSize` (int, default: 10)
+- **Status Codes**: `200 OK`, `401 Unauthorized`, `403 Forbidden`
+- **Response `200 OK`**: `PagedResult<InvitationDto>`
+
+---
+
+#### 13b. Get User's Sent Invitations Feed (Mobile Cursor Keyset Pagination)
+- **Method**: `GET`
+- **Route**: `/api/user/:id/invited-by-list/feed` (alias: `/api/v1/users/:id/invited-by-list/feed`)
+- **Target User Role**: Self or `System Admin`
+- **Required Permission**: Self or `Invitation.View`
+- **Query Parameters**: `lastId` (int, optional), `pageSize` (int, default: 15)
+- **Status Codes**: `200 OK`, `401 Unauthorized`, `403 Forbidden`
+- **Response `200 OK`**: `CursorPagedResult<InvitationDto>`
+
+---
+
+#### 14. Get User Notifications (Web Offset Pagination)
+- **Method**: `GET`
+- **Route**: `/api/user/:id/notification` (alias: `/api/v1/users/:id/notification`)
+- **Target User Role**: Self or `System Admin`
+- **Required Permission**: Self or `Notification.View`
+- **Query Parameters**:
+  - `pageNumber` (int, default: 1)
+  - `pageSize` (int, default: 10)
+- **Status Codes**: `200 OK`, `401 Unauthorized`, `403 Forbidden`
+- **Response `200 OK` (PagedResult<NotificationDto>)**:
+```json
+{
+  "isSuccess": true,
+  "message": "Success",
+  "isFailure": false,
+  "data": [
+    {
+      "id": 10,
+      "userId": 2,
+      "type": 1,
+      "message": "Your donation request has been accepted.",
+      "isRead": false,
+      "createdAt": "2026-11-05T06:00:00Z"
+    }
+  ],
+  "pagination": {
+    "pageNumber": 1,
+    "pageSize": 10,
+    "totalCount": 1,
+    "totalPages": 1,
+    "hasPreviousPage": false,
+    "hasNextPage": false
+  }
+}
+```
+
+---
+
+#### 15. Get User Notifications Feed (Mobile Cursor Keyset Pagination)
+- **Method**: `GET`
+- **Route**: `/api/user/:id/notification/feed` (alias: `/api/v1/users/:id/notification/feed`)
+- **Target User Role**: Self or `System Admin`
+- **Required Permission**: Self or `Notification.View`
+- **Query Parameters**:
+  - `lastId` (int, optional): Last notification ID from previous page.
+  - `pageSize` (int, default: 15)
+- **Status Codes**: `200 OK`, `401 Unauthorized`, `403 Forbidden`
+- **Response `200 OK` (CursorPagedResult<NotificationDto>)**:
+```json
+{
+  "isSuccess": true,
+  "message": "Success",
+  "isFailure": false,
+  "data": [
+    {
+      "id": 10,
+      "userId": 2,
+      "type": 1,
+      "message": "Your donation request has been accepted.",
+      "isRead": false,
+      "createdAt": "2026-11-05T06:00:00Z"
+    }
+  ],
+  "pagination": {
+    "nextCursor": 10,
+    "hasNextPage": false,
+    "pageSize": 15
+  }
+}
+```
+
+---
+
+#### 16. Clear All User Notifications
+- **Method**: `DELETE`
+- **Route**: `/api/user/:id/notification` (alias: `/api/v1/users/:id/notification`)
+- **Target User Role**: Self or `System Admin`
+- **Required Permission**: Self or `Notification.Manage`
+- **Status Codes**: `200 OK`, `401 Unauthorized`, `403 Forbidden`
+- **Response `200 OK` (Standard Void Result)**:
+```json
+{
+  "isSuccess": true,
+  "message": "Notifications cleared successfully.",
+  "isFailure": false
+}
+```
+
+---
+
+#### 17. Get Monk Profile
+- **Method**: `GET`
+- **Route**: `/api/user/:id/monk-profile` (alias: `/api/v1/users/:id/monk-profile`)
+- **Target User Role**: `Monk` (Self) or `System Admin`
+- **Required Permission**: Self or `Users.View`
+- **Status Codes**: `200 OK`, `400 Bad Request`, `401 Unauthorized`, `403 Forbidden`
+- **Response `200 OK` (Result<MonkProfileDto>)**:
+```json
+{
+  "isSuccess": true,
+  "message": "Success",
+  "isFailure": false,
   "data": {
     "id": 1,
-    "name": "Ashin Pannita",
-    "phone": "09123456789",
-    "roleId": 1
-  }
-}
-```
-
----
-
-#### 10. Update User Profile
-- **Method**: `PUT`
-- **Route**: `/api/v1/users/:id`
-- **Target User Role**: Self or `User.Update`
-- **Description**: Updates profile details and optionally uploads a new avatar via multipart/form-data to Cloudflare R2.
-- **Request Body (JSON or multipart/form-data)**:
-```json
-{
-  "name": "Ashin Pannita Updated",
-  "email": "newemail@monastery.org",
-  "contactPhone": "09123456789",
-  "monkProfile": {
-    "monasteryName": "Mahagandhayon (New Wing)",
+    "userId": 2,
+    "monasteryName": "Mahagandhayon Monastery",
     "monasteryAddress": "Amarapura, Mandalay"
   }
 }
 ```
-- **Response `200 OK`**:
+
+---
+
+#### 18. Update Monk Profile
+- **Method**: `PATCH` (alias: `PUT`)
+- **Route**: `/api/user/:id/monk-profile` (alias: `/api/v1/users/:id/monk-profile`)
+- **Target User Role**: `Monk` (Self) or `System Admin`
+- **Required Permission**: Self or `Users.Update`
+- **Request Body**:
 ```json
 {
-  "success": true,
-  "message": "User updated successfully",
+  "monasteryName": "Mahagandhayon (Main Campus)",
+  "monasteryAddress": "Amarapura, Mandalay Division"
+}
+```
+- **Status Codes**: `200 OK`, `400 Bad Request`, `401 Unauthorized`, `403 Forbidden`
+- **Response `200 OK` (Result<MonkProfileDto>)**:
+```json
+{
+  "isSuccess": true,
+  "message": "Monk profile updated successfully.",
+  "isFailure": false,
   "data": {
     "id": 1,
-    "name": "Ashin Pannita Updated",
-    "email": "newemail@monastery.org"
+    "userId": 2,
+    "monasteryName": "Mahagandhayon (Main Campus)",
+    "monasteryAddress": "Amarapura, Mandalay Division"
   }
 }
 ```
 
 ---
 
-#### 11. Soft Delete User Account
+#### 19. Delete Monk Profile
 - **Method**: `DELETE`
-- **Route**: `/api/v1/users/:id`
-- **Target User Role**: Self or `User.Delete`
-- **Description**: Sets `isDeleted = true` on the target user record and invalidates profile caches.
-- **Response `200 OK`**:
+- **Route**: `/api/user/:id/monk-profile` (alias: `/api/v1/users/:id/monk-profile`)
+- **Target User Role**: `Monk` (Self) or `System Admin`
+- **Required Permission**: Self or `Users.Manage`
+- **Status Codes**: `200 OK`, `400 Bad Request`, `401 Unauthorized`, `403 Forbidden`
+- **Response `200 OK` (Standard Void Result)**:
 ```json
 {
-  "success": true,
-  "message": "User deleted successfully"
+  "isSuccess": true,
+  "message": "Monk profile deleted successfully.",
+  "isFailure": false
+}
+```
+
+---
+
+#### 20. Get User Reminder & Notification Settings
+- **Method**: `GET`
+- **Route**: `/api/user/:id/settings` (alias: `/api/v1/users/:id/settings`, `/api/v1/user-settings/me`)
+- **Target User Role**: Any Authenticated User (Self) or `System Admin`
+- **Required Permission**: Self or `Users.View`
+- **Status Codes**: `200 OK`, `401 Unauthorized`, `403 Forbidden`
+- **Response `200 OK` (Result<UserSettingDto>)**:
+```json
+{
+  "isSuccess": true,
+  "message": "Success",
+  "isFailure": false,
+  "data": {
+    "userId": 2,
+    "pickupNotificationTime": "2026-11-01T15:30:00Z",
+    "dropoffNotificationTime": "2026-11-01T22:00:00Z",
+    "pickupTime": null,
+    "dropoffTime": null
+  }
+}
+```
+
+---
+
+#### 21. Update User Reminder & Notification Settings
+- **Method**: `PUT`
+- **Route**: `/api/user/:id/settings` (alias: `/api/v1/users/:id/settings`, `/api/v1/user-settings/me`)
+- **Target User Role**: Any Authenticated User (Self) or `System Admin`
+- **Required Permission**: Self or `Users.Update`
+- **Request Body**:
+```json
+{
+  "pickupNotificationTime": "2026-11-01T14:00:00Z",
+  "dropoffNotificationTime": "2026-11-01T21:00:00Z",
+  "pickupTime": null,
+  "dropoffTime": null
+}
+```
+- **Status Codes**: `200 OK`, `400 Bad Request`, `401 Unauthorized`, `403 Forbidden`
+- **Response `200 OK` (Result<UserSettingDto>)**:
+```json
+{
+  "isSuccess": true,
+  "message": "Settings updated successfully.",
+  "isFailure": false,
+  "data": {
+    "userId": 2,
+    "pickupNotificationTime": "2026-11-01T14:00:00Z",
+    "dropoffNotificationTime": "2026-11-01T21:00:00Z",
+    "pickupTime": null,
+    "dropoffTime": null
+  }
 }
 ```
 
