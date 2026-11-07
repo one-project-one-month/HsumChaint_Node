@@ -1,6 +1,6 @@
 import type { NextFunction, Request, Response } from 'express';
 import { AppError } from '@/utils/AppError';
-import { successResponse, voidSuccessResponse } from '@/utils/response';
+import { sendSuccessResponse } from '@/utils/response';
 import type {
   forgotPasswordInput,
   LoginInput,
@@ -34,7 +34,7 @@ export const register = async (
       maxAge: 30 * 24 * 60 * 60 * 1000,
     });
     res.setHeader('Authorization', `Bearer ${result.accessToken}`);
-    return voidSuccessResponse(res, 'Register Successful', 200);
+    return sendSuccessResponse(res, undefined, 'Register Successful', 200);
   } catch (error) {
     next(error);
   }
@@ -55,7 +55,7 @@ export const login = async (
       maxAge: 30 * 24 * 60 * 60 * 1000,
     });
     res.setHeader('Authorization', `Bearer ${result.accessToken}`);
-    return successResponse(res, result, 'Login Successful');
+    return sendSuccessResponse(res, result, 'Login Successful');
   } catch (error) {
     next(error);
   }
@@ -81,7 +81,7 @@ export const refreshAccessToken = async (
       sameSite: 'lax',
       maxAge: 30 * 24 * 60 * 60 * 1000,
     });
-    return successResponse(res, result, 'Successful');
+    return sendSuccessResponse(res, result, 'Successful');
   } catch (error) {
     next(error);
   }
@@ -103,7 +103,7 @@ export const logout = async (
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
     });
-    return voidSuccessResponse(res, 'Logged out successfully.');
+    return sendSuccessResponse(res, undefined, 'Logged out successfully.');
   } catch (error) {
     next(error);
   }
@@ -112,7 +112,7 @@ export const logout = async (
 export const getLoginMode = async (_req: Request, res: Response, next: NextFunction) => {
   try {
     const result = await getLoginModeService();
-    return successResponse(res, result, 'Success');
+    return sendSuccessResponse(res, result, 'Success');
   } catch (error) {
     next(error);
   }
@@ -125,7 +125,7 @@ export const forgotPassword = async (
 ) => {
   try {
     const result = await forgotPasswordService(req.body.phone);
-    return successResponse(res, result, 'Password reset email sent');
+    return sendSuccessResponse(res, result, 'Password reset email sent');
   } catch (error) {
     next(error);
   }
@@ -138,7 +138,7 @@ export const resetPassword = async (
 ) => {
   try {
     await resetPasswordService(req.body);
-    return voidSuccessResponse(res, 'Password successfully reset');
+    return sendSuccessResponse(res, undefined, 'Password successfully reset');
   } catch (error) {
     next(error);
   }
