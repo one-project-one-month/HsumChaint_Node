@@ -251,7 +251,7 @@ export const createRoleService = async (data: CreateRoleInput): Promise<Formatte
 
   // Check uniqueness
   const existing = await prisma.role.findFirst({
-    where: { name: trimmedName, isDeleted: false },
+    where: { name: trimmedName },
   });
   if (existing || normalized === 'ADMIN') {
     throw new AppError(
@@ -266,37 +266,44 @@ export const createRoleService = async (data: CreateRoleInput): Promise<Formatte
   const permissionIds = Array.from(new Set(data.permissionIds || []));
   await validateSystemPermissions(permissionIds);
 
-  // Transactionally create role and permissions
-  const created = await prisma.$transaction(async (tx) => {
-    const role = await tx.role.create({
-      data: {
-        name: trimmedName,
-        isDeleted: false,
-      },
-    });
-
-    if (permissionIds.length > 0) {
-      await tx.rolePermission.createMany({
-        data: permissionIds.map((pId) => ({
-          roleId: role.id,
-          permissionId: pId,
-        })),
+  try {
+    // Transactionally create role and permissions
+    const created = await prisma.$transaction(async (tx) => {
+      const role = await tx.role.create({
+        data: {
+          name: trimmedName,
+          isDeleted: false,
+        },
       });
-    }
 
-    return tx.role.findUniqueOrThrow({
-      where: { id: role.id },
-      include: {
-        rolePermissions: {
-          include: {
-            permission: true,
+      if (permissionIds.length > 0) {
+        await tx.rolePermission.createMany({
+          data: permissionIds.map((pId) => ({
+            roleId: role.id,
+            permissionId: pId,
+          })),
+        });
+      }
+
+      return tx.role.findUniqueOrThrow({
+        where: { id: role.id },
+        include: {
+          rolePermissions: {
+            include: {
+              permission: true,
+            },
           },
         },
-      },
+      });
     });
-  });
 
-  return mapRoleToDto(created, created.rolePermissions, data.description ?? null);
+    return mapRoleToDto(created, created.rolePermissions, data.description ?? null);
+  } catch (err: unknown) {
+    if (err && typeof err === 'object' && (err as { code?: string }).code === 'P2002') {
+      throw new AppError('Role name already exists', 400);
+    }
+    throw err;
+  }
 };
 
 /**
@@ -337,7 +344,7 @@ export const updateRoleService = async (
   // If renaming, ensure uniqueness
   if (trimmedName && trimmedName.toLowerCase() !== role.name.toLowerCase()) {
     const duplicate = await prisma.role.findFirst({
-      where: { name: trimmedName, isDeleted: false, id: { not: id } },
+      where: { name: trimmedName, id: { not: id } },
     });
     if (duplicate) {
       throw new AppError('Role name already exists', 400);
@@ -351,46 +358,53 @@ export const updateRoleService = async (
     await validateSystemPermissions(permissionIds);
   }
 
-  // Perform update in transaction
-  const updated = await prisma.$transaction(async (tx) => {
-    if (trimmedName) {
-      await tx.role.update({
-        where: { id },
-        data: { name: trimmedName },
-      });
-    }
-
-    if (permissionIds !== undefined) {
-      await tx.rolePermission.deleteMany({
-        where: { roleId: id },
-      });
-
-      if (permissionIds.length > 0) {
-        await tx.rolePermission.createMany({
-          data: permissionIds.map((pId) => ({
-            roleId: id,
-            permissionId: pId,
-          })),
+  try {
+    // Perform update in transaction
+    const updated = await prisma.$transaction(async (tx) => {
+      if (trimmedName) {
+        await tx.role.update({
+          where: { id },
+          data: { name: trimmedName },
         });
       }
-    }
 
-    return tx.role.findUniqueOrThrow({
-      where: { id },
-      include: {
-        rolePermissions: {
-          include: {
-            permission: true,
+      if (permissionIds !== undefined) {
+        await tx.rolePermission.deleteMany({
+          where: { roleId: id },
+        });
+
+        if (permissionIds.length > 0) {
+          await tx.rolePermission.createMany({
+            data: permissionIds.map((pId) => ({
+              roleId: id,
+              permissionId: pId,
+            })),
+          });
+        }
+      }
+
+      return tx.role.findUniqueOrThrow({
+        where: { id },
+        include: {
+          rolePermissions: {
+            include: {
+              permission: true,
+            },
           },
         },
-      },
+      });
     });
-  });
 
-  // Invalidate Redis cache
-  await clearRolePermissionsCache(id);
+    // Invalidate Redis cache
+    await clearRolePermissionsCache(id);
 
-  return mapRoleToDto(updated, updated.rolePermissions, data.description ?? null);
+    return mapRoleToDto(updated, updated.rolePermissions, data.description ?? null);
+  } catch (err: unknown) {
+    if (err && typeof err === 'object' && (err as { code?: string }).code === 'P2002') {
+      throw new AppError('Role name already exists', 400);
+    }
+    throw err;
+  }
 };
 
 /**

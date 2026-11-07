@@ -237,7 +237,7 @@ export const createSpaceRoleService = async (data: CreateSpaceRoleInput): Promis
 
   // Check uniqueness and reserved names
   const existing = await prisma.spaceRole.findFirst({
-    where: { name: trimmedName, isDeleted: false },
+    where: { name: trimmedName },
   });
   if (existing || normalized === 'OWNER') {
     throw new AppError(
@@ -251,39 +251,46 @@ export const createSpaceRoleService = async (data: CreateSpaceRoleInput): Promis
   const permissionIds = Array.from(new Set(data.permissionIds || []));
   await validateSpacePermissions(permissionIds);
 
-  const created = await prisma.$transaction(async (tx) => {
-    const role = await tx.spaceRole.create({
-      data: {
-        name: trimmedName,
-        description: data.description?.trim() ?? null,
-        isDeleted: false,
-      },
-    });
-
-    if (permissionIds.length > 0) {
-      await tx.spaceRolePermission.createMany({
-        data: permissionIds.map((pId) => ({
-          spaceRoleId: role.id,
-          spacePermissionId: pId,
+  try {
+    const created = await prisma.$transaction(async (tx) => {
+      const role = await tx.spaceRole.create({
+        data: {
+          name: trimmedName,
+          description: data.description?.trim() ?? null,
           isDeleted: false,
-        })),
+        },
       });
-    }
 
-    return tx.spaceRole.findUniqueOrThrow({
-      where: { id: role.id },
-      include: {
-        permissions: {
-          where: { isDeleted: false },
-          include: {
-            spacePermission: true,
+      if (permissionIds.length > 0) {
+        await tx.spaceRolePermission.createMany({
+          data: permissionIds.map((pId) => ({
+            spaceRoleId: role.id,
+            spacePermissionId: pId,
+            isDeleted: false,
+          })),
+        });
+      }
+
+      return tx.spaceRole.findUniqueOrThrow({
+        where: { id: role.id },
+        include: {
+          permissions: {
+            where: { isDeleted: false },
+            include: {
+              spacePermission: true,
+            },
           },
         },
-      },
+      });
     });
-  });
 
-  return mapSpaceRoleToDto(created, created.permissions);
+    return mapSpaceRoleToDto(created, created.permissions);
+  } catch (err: unknown) {
+    if (err && typeof err === 'object' && (err as { code?: string }).code === 'P2002') {
+      throw new AppError('Space role name already exists', 400);
+    }
+    throw err;
+  }
 };
 
 /**
@@ -322,7 +329,7 @@ export const updateSpaceRoleService = async (
 
   if (trimmedName && trimmedName.toLowerCase() !== role.name.toLowerCase()) {
     const duplicate = await prisma.spaceRole.findFirst({
-      where: { name: trimmedName, isDeleted: false, id: { not: id } },
+      where: { name: trimmedName, id: { not: id } },
     });
     if (duplicate) {
       throw new AppError('Space role name already exists', 400);
@@ -335,50 +342,57 @@ export const updateSpaceRoleService = async (
     await validateSpacePermissions(permissionIds);
   }
 
-  const updated = await prisma.$transaction(async (tx) => {
-    const updateData: { name?: string; description?: string | null } = {};
-    if (trimmedName) updateData.name = trimmedName;
-    if (data.description !== undefined) updateData.description = data.description?.trim() ?? null;
+  try {
+    const updated = await prisma.$transaction(async (tx) => {
+      const updateData: { name?: string; description?: string | null } = {};
+      if (trimmedName) updateData.name = trimmedName;
+      if (data.description !== undefined) updateData.description = data.description?.trim() ?? null;
 
-    if (Object.keys(updateData).length > 0) {
-      await tx.spaceRole.update({
-        where: { id },
-        data: updateData,
-      });
-    }
-
-    if (permissionIds !== undefined) {
-      await tx.spaceRolePermission.deleteMany({
-        where: { spaceRoleId: id },
-      });
-
-      if (permissionIds.length > 0) {
-        await tx.spaceRolePermission.createMany({
-          data: permissionIds.map((pId) => ({
-            spaceRoleId: id,
-            spacePermissionId: pId,
-            isDeleted: false,
-          })),
+      if (Object.keys(updateData).length > 0) {
+        await tx.spaceRole.update({
+          where: { id },
+          data: updateData,
         });
       }
-    }
 
-    return tx.spaceRole.findUniqueOrThrow({
-      where: { id },
-      include: {
-        permissions: {
-          where: { isDeleted: false },
-          include: {
-            spacePermission: true,
+      if (permissionIds !== undefined) {
+        await tx.spaceRolePermission.deleteMany({
+          where: { spaceRoleId: id },
+        });
+
+        if (permissionIds.length > 0) {
+          await tx.spaceRolePermission.createMany({
+            data: permissionIds.map((pId) => ({
+              spaceRoleId: id,
+              spacePermissionId: pId,
+              isDeleted: false,
+            })),
+          });
+        }
+      }
+
+      return tx.spaceRole.findUniqueOrThrow({
+        where: { id },
+        include: {
+          permissions: {
+            where: { isDeleted: false },
+            include: {
+              spacePermission: true,
+            },
           },
         },
-      },
+      });
     });
-  });
 
-  await clearSpaceRolePermissionsCache(id);
+    await clearSpaceRolePermissionsCache(id);
 
-  return mapSpaceRoleToDto(updated, updated.permissions);
+    return mapSpaceRoleToDto(updated, updated.permissions);
+  } catch (err: unknown) {
+    if (err && typeof err === 'object' && (err as { code?: string }).code === 'P2002') {
+      throw new AppError('Space role name already exists', 400);
+    }
+    throw err;
+  }
 };
 
 /**
