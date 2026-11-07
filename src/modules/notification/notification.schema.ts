@@ -46,15 +46,48 @@ export const notificationIdParamSchema = z.object({
 });
 
 export const markNotificationAsReadSchema = z.object({
-  params: notificationIdParamSchema.shape.params,
-  body: z
-    .object({
-      isRead: z.boolean().optional().default(true),
-    })
-    .optional(),
+  body: z.object({
+    notificationId: z.coerce.number().int().positive('Notification ID must be a positive number'),
+    userId: z.coerce.number().int().positive('User ID must be a positive number').optional(),
+  }),
 });
+
+export const deleteNotificationSchema = z
+  .object({
+    body: z
+      .object({
+        notificationId: z.coerce
+          .number()
+          .int()
+          .positive('Notification ID must be a positive number')
+          .optional(),
+        userId: z.coerce.number().int().positive('User ID must be a positive number').optional(),
+      })
+      .optional(),
+    params: z
+      .object({
+        id: z
+          .string()
+          .regex(/^\d+$/, 'ID must be a number')
+          .transform(Number)
+          .refine((val) => !Number.isNaN(val) && val > 0, 'ID must be a valid positive number')
+          .optional(),
+      })
+      .optional(),
+  })
+  .refine(
+    (data) => Boolean(data.body?.notificationId !== undefined || data.params?.id !== undefined),
+    {
+      message: 'Notification ID is required in body (notificationId) or route params',
+      path: ['body', 'notificationId'],
+    }
+  );
 
 export type CreateNotificationInput = z.infer<typeof createNotificationSchema>['body'];
 export type GetNotificationsQueryInput = z.infer<typeof getNotificationsSchema>['query'];
 export type NotificationIdParamInput = z.infer<typeof notificationIdParamSchema>['params'];
 export type MarkNotificationAsReadInput = z.infer<typeof markNotificationAsReadSchema>['body'];
+export type DeleteNotificationInput = {
+  notificationId?: number;
+  userId?: number;
+};
