@@ -1,0 +1,23 @@
+meta {
+  name: 46. Create System Role
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{baseUrl}}/api/v1/roles
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:json {
+  {
+    "name": "Auditor",
+    "description": "Read-only system inspector"
+  }
+}
+

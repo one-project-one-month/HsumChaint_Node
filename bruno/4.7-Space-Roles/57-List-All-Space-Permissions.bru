@@ -1,0 +1,21 @@
+meta {
+  name: 57. List All Space Permissions
+  type: http
+  seq: 7
+}
+
+get {
+  url: {{baseUrl}}/api/v1/space-permissions?pageNumber=1&pageSize=10
+  body: none
+  auth: bearer
+}
+
+params:query {
+  pageNumber: 1
+  pageSize: 10
+}
+
+auth:bearer {
+  token: {{token}}
+}
+

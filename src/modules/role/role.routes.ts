@@ -2,7 +2,6 @@ import { Router } from 'express';
 import { authMiddleWare } from '@/middlewares/authMiddleWare';
 import { checkPermission } from '@/middlewares/permissionMiddleware';
 import { validator } from '@/middlewares/validator';
-import { getSpaceRoleById, getSpaceRoles } from '../space/space.controller';
 import {
   assignPermissions,
   createRole,
@@ -17,60 +16,60 @@ import {
 import {
   assignPermissionsSchema,
   createRoleSchema,
+  deleteRoleSchema,
   getPermissionsQuerySchema,
   getRolesQuerySchema,
   roleIdParamSchema,
   updateRoleSchema,
 } from './role.schema';
 
-const router = Router();
+const roleRouter = Router();
 
-// Require authentication for all role/permission routes
-router.use(authMiddleWare);
+// Require authentication for all role routes
+roleRouter.use(authMiddleWare);
 
-// Space Roles (Space Admin, Space Moderator, Space Editor, Space Member)
-router.get('/space-roles', getSpaceRoles);
-router.get('/space-roles/:id', validator(roleIdParamSchema), getSpaceRoleById);
+// 44. Get System Roles: GET /api/v1/roles
+roleRouter.get('/', checkPermission('Roles.View'), validator(getRolesQuerySchema), getRoles);
 
-// 1. Permissions catalog endpoint
-router.get(
-  '/permissions',
-  checkPermission('Role.View'),
-  validator(getPermissionsQuerySchema),
-  getPermissions
+// 50. Assign Permissions to Role: POST /api/v1/roles/assign-permissions
+// (also supports legacy /assign alias for backward compatibility)
+roleRouter.post(
+  '/assign-permissions',
+  checkPermission('Roles.Assign'),
+  validator(assignPermissionsSchema),
+  assignPermissions
 );
-
-// 2. Assign permissions endpoint
-router.post(
+roleRouter.post(
   '/assign',
-  checkPermission('Role.Update'),
+  checkPermission('Roles.Assign'),
   validator(assignPermissionsSchema),
   assignPermissions
 );
 
-// 3. User permission queries
-router.get('/me/permissions', getMyPermissions);
-router.get('/users/:userId/permissions', checkPermission('Role.View'), getUserPermissions);
+// User-specific permission helpers
+roleRouter.get('/me/permissions', getMyPermissions);
+roleRouter.get('/users/:userId/permissions', checkPermission('Roles.View'), getUserPermissions);
 
-// 4. Role endpoints (supports both standard REST / and BookStorePOS /roles paths)
-router.get('/', checkPermission('Role.View'), validator(getRolesQuerySchema), getRoles);
-router.get('/roles', checkPermission('Role.View'), validator(getRolesQuerySchema), getRoles);
+// 46. Create System Role: POST /api/v1/roles
+roleRouter.post('/', checkPermission('Roles.Manage'), validator(createRoleSchema), createRole);
 
-router.post('/', checkPermission('Role.Create'), validator(createRoleSchema), createRole);
-router.post('/roles', checkPermission('Role.Create'), validator(createRoleSchema), createRole);
-
-router.get('/:id', checkPermission('Role.View'), validator(roleIdParamSchema), getRoleById);
-router.get('/roles/:id', checkPermission('Role.View'), validator(roleIdParamSchema), getRoleById);
-
-router.put('/:id', checkPermission('Role.Update'), validator(updateRoleSchema), updateRole);
-router.put('/roles/:id', checkPermission('Role.Update'), validator(updateRoleSchema), updateRole);
-
-router.delete('/:id', checkPermission('Role.Delete'), validator(roleIdParamSchema), deleteRole);
-router.delete(
-  '/roles/:id',
-  checkPermission('Role.Delete'),
-  validator(roleIdParamSchema),
-  deleteRole
+roleRouter.get(
+  '/permissions',
+  checkPermission('Roles.View'),
+  validator(getPermissionsQuerySchema),
+  getPermissions
 );
 
-export default router;
+// 45. Get System Role by ID: GET /api/v1/roles/:id
+roleRouter.get('/:id', checkPermission('Roles.View'), validator(roleIdParamSchema), getRoleById);
+
+// 47. Update System Role: PUT /api/v1/roles/:id
+roleRouter.put('/:id', checkPermission('Roles.Manage'), validator(updateRoleSchema), updateRole);
+
+// 48. Delete System Role: DELETE /api/v1/roles/:id
+roleRouter.delete('/:id', checkPermission('Roles.Manage'), validator(deleteRoleSchema), deleteRole);
+
+// Re-export permissionRouter for backwards compatibility
+export { default as permissionRouter } from '../permission/permission.routes';
+
+export default roleRouter;

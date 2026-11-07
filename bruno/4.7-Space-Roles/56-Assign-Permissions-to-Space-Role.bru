@@ -1,0 +1,23 @@
+meta {
+  name: 56. Assign Permissions to Space Role
+  type: http
+  seq: 6
+}
+
+post {
+  url: {{baseUrl}}/api/v1/space-roles/assign-permissions
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:json {
+  {
+    "spaceRoleId": 3,
+    "permissionIds": [1, 2, 3, 4]
+  }
+}
+

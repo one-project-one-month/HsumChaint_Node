@@ -1,0 +1,10 @@
+{
+  "version": "1",
+  "name": "HsumChaint RBAC API",
+  "type": "collection",
+  "ignore": [
+    "node_modules",
+    ".git"
+  ]
+}
+

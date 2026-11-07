@@ -1,0 +1,21 @@
+meta {
+  name: 44. Get System Roles
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/api/v1/roles?pageNumber=1&pageSize=10
+  body: none
+  auth: bearer
+}
+
+params:query {
+  pageNumber: 1
+  pageSize: 10
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
