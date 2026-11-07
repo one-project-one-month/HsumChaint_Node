@@ -21,56 +21,13 @@ export const PREDEFINED_SPACE_PERMISSIONS = [
  * Ensures all 12 predefined space permissions are persisted in the database
  */
 export const ensureSpacePermissionsInDb = async (): Promise<void> => {
-  if (typeof prisma.spacePermission?.findFirst !== 'function') return;
-  for (let i = 0; i < PREDEFINED_SPACE_PERMISSIONS.length; i++) {
-    const sp = PREDEFINED_SPACE_PERMISSIONS[i];
-    const id = i + 1;
-
-    try {
-      // 1. Check if permission with target name already exists
-      const existingByName = await prisma.spacePermission.findFirst({
-        where: { name: sp.name },
-      });
-
-      if (existingByName) {
-        if (existingByName.isDeleted || existingByName.description !== sp.description) {
-          await prisma.spacePermission.update({
-            where: { id: existingByName.id },
-            data: { isDeleted: false, description: sp.description },
-          });
-        }
-        continue;
-      }
-
-      // 2. Check if target ID is occupied
-      const existingById = await prisma.spacePermission.findUnique({
-        where: { id },
-      });
-
-      if (!existingById) {
-        // Free slot: insert with the exact predefined ID (1..12)
-        await prisma.spacePermission.create({
-          data: {
-            id,
-            name: sp.name,
-            description: sp.description,
-            isDeleted: false,
-          },
-        });
-      } else {
-        // Target ID is occupied by an obsolete legacy permission name: update it to the new name
-        await prisma.spacePermission.update({
-          where: { id },
-          data: {
-            name: sp.name,
-            description: sp.description,
-            isDeleted: false,
-          },
-        });
-      }
-    } catch {
-      // Fallback in case of race condition or mock
-    }
+  // Preserve existing IDs, grants, and intentionally disabled permissions.
+  for (const permission of PREDEFINED_SPACE_PERMISSIONS) {
+    await prisma.spacePermission.upsert({
+      where: { name: permission.name },
+      update: { description: permission.description },
+      create: { ...permission, isDeleted: false },
+    });
   }
 };
 
@@ -98,26 +55,12 @@ export const getSpacePermissionsOnlyService = async (pageNumber = 1, pageSize = 
     }
   }
 
-  let permissions = await prisma.spacePermission.findMany({
+  const permissions = await prisma.spacePermission.findMany({
     where: { isDeleted: false },
     skip,
     take: pageSize,
     orderBy: { id: 'asc' },
   });
-
-  // Fallback to predefined space permissions if database/mock table is empty
-  if (totalCount === 0) {
-    const fallbackList = PREDEFINED_SPACE_PERMISSIONS.map((p, idx) => ({
-      id: idx + 1,
-      name: p.name,
-      description: p.description,
-      isDeleted: false,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    }));
-    totalCount = fallbackList.length;
-    permissions = fallbackList.slice(skip, skip + pageSize);
-  }
 
   return {
     items: permissions.map(formatPermission),
@@ -142,31 +85,16 @@ export const searchSpacePermissionsService = async (
   const skip = (pageNumber - 1) * pageSize;
   const trimmed = keyword.trim();
 
-  let permissions = await prisma.spacePermission.findMany({
+  const permissions = await prisma.spacePermission.findMany({
     where: { isDeleted: false, name: { contains: trimmed } },
     skip,
     take: pageSize,
     orderBy: { id: 'asc' },
   });
 
-  let totalCount = await prisma.spacePermission.count({
+  const totalCount = await prisma.spacePermission.count({
     where: { isDeleted: false, name: { contains: trimmed } },
   });
-
-  if (totalCount === 0 && permissions.length === 0) {
-    const fallbackList = PREDEFINED_SPACE_PERMISSIONS.filter((p) =>
-      p.name.toLowerCase().includes(trimmed.toLowerCase())
-    ).map((p, idx) => ({
-      id: idx + 1,
-      name: p.name,
-      description: p.description,
-      isDeleted: false,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    }));
-    totalCount = fallbackList.length;
-    permissions = fallbackList.slice(skip, skip + pageSize);
-  }
 
   return {
     items: permissions.map(formatPermission),

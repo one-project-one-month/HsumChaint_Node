@@ -7,6 +7,7 @@ import {
   createRole,
   deleteRole,
   getMyPermissions,
+  getPermissions,
   getRoleById,
   getRoles,
   getUserPermissions,
@@ -16,6 +17,7 @@ import {
   assignPermissionsSchema,
   createRoleSchema,
   deleteRoleSchema,
+  getPermissionsQuerySchema,
   getRolesQuerySchema,
   roleIdParamSchema,
   updateRoleSchema,
@@ -50,6 +52,13 @@ roleRouter.get('/users/:userId/permissions', checkPermission('Roles.View'), getU
 
 // 46. Create System Role: POST /api/v1/roles
 roleRouter.post('/', checkPermission('Roles.Manage'), validator(createRoleSchema), createRole);
+
+roleRouter.get(
+  '/permissions',
+  checkPermission('Roles.View'),
+  validator(getPermissionsQuerySchema),
+  getPermissions
+);
 
 // 45. Get System Role by ID: GET /api/v1/roles/:id
 roleRouter.get('/:id', checkPermission('Roles.View'), validator(roleIdParamSchema), getRoleById);

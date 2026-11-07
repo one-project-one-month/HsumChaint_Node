@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, mock } from 'bun:test';
+import { beforeEach, describe, expect, it, mock, test } from 'bun:test';
 import request from 'supertest';
 import { generateAccessToken } from '@/utils/jwt';
 
@@ -393,9 +393,9 @@ describe('Dynamic RBAC & System Permissions (/api/v1/roles, /api/v1/permissions)
     adminToken = generateAccessToken({ userId: 1, roleId: 3 });
 
     mockRoles = [
-      { id: 1, name: 'Admin', isDeleted: false },
-      { id: 2, name: 'Monk', isDeleted: false },
-      { id: 3, name: 'User', isDeleted: false },
+      { id: 1, name: 'Monk', isDeleted: false },
+      { id: 2, name: 'Donor', isDeleted: false },
+      { id: 3, name: 'Admin', isDeleted: false },
     ];
 
     mockPermissions = [
@@ -458,7 +458,7 @@ describe('Dynamic RBAC & System Permissions (/api/v1/roles, /api/v1/permissions)
     expect(res.status).toBe(200);
     expect(res.body.isSuccess).toBe(true);
     expect(res.body.data.id).toBe(1);
-    expect(res.body.data.name).toBe('Admin');
+    expect(res.body.data.name).toBe('Monk');
     expect(res.body.data.permissionKeys).toBeArray();
   });
 
@@ -482,7 +482,7 @@ describe('Dynamic RBAC & System Permissions (/api/v1/roles, /api/v1/permissions)
   it('47. PUT /api/v1/roles/:id - updates custom role and protects Admin role', async () => {
     // Should reject updating Admin role
     const adminRes = await request(app)
-      .put('/api/v1/roles/1')
+      .put('/api/v1/roles/3')
       .set('Authorization', `Bearer ${adminToken}`)
       .send({
         name: 'Super Admin',
@@ -506,7 +506,7 @@ describe('Dynamic RBAC & System Permissions (/api/v1/roles, /api/v1/permissions)
   // 48. Delete System Role
   it('48. DELETE /api/v1/roles/:id - soft-deletes custom role and protects Admin role', async () => {
     const adminDeleteRes = await request(app)
-      .delete('/api/v1/roles/1')
+      .delete('/api/v1/roles/3')
       .set('Authorization', `Bearer ${adminToken}`);
     expect(adminDeleteRes.status).toBe(400);
 
@@ -694,4 +694,43 @@ describe('Dynamic Space RBAC & Space Permissions (/api/v1/space-roles, /api/v1/s
     expect(res.body.pagination.pageNumber).toBe(1);
     expect(res.body.pagination.pageSize).toBe(10);
   });
+});
+
+describe('RBAC compatibility and role boundaries', () => {
+  it('keeps the documented permission-catalog alias', async () => {
+    const res = await request(app)
+      .get('/api/v1/roles/permissions')
+      .set('Authorization', `Bearer ${generateAccessToken({ userId: 1, roleId: 3 })}`);
+    expect(res.status).toBe(200);
+    expect(res.body.data).toBeArray();
+  });
+
+  it('does not treat Monk or Donor roles as administrators', async () => {
+    const { isSystemAdminRoleId } = await import('@/middlewares/permissionMiddleware');
+    const { isSystemAdmin } = await import('../role.service');
+    for (const roleId of [1, 2]) {
+      expect(isSystemAdminRoleId(roleId)).toBe(false);
+      expect(isSystemAdmin({ id: roleId, name: roleId === 1 ? 'Monk' : 'Donor' })).toBe(false);
+      mockRolePermissions = [];
+      const res = await request(app)
+        .post('/api/v1/roles')
+        .set('Authorization', `Bearer ${generateAccessToken({ userId: 10, roleId })}`)
+        .send({ name: 'Unauthorized role' });
+      expect(res.status).toBe(403);
+    }
+    expect(isSystemAdminRoleId(3)).toBe(true);
+    expect(isSystemAdmin({ id: 3, name: 'Admin' })).toBe(true);
+  });
+});
+
+test('space permission results never fabricate IDs for disabled or missing rows', async () => {
+  const { searchSpacePermissionsService, getSpacePermissionsOnlyService } = await import(
+    '@/modules/space-permission/space-permission.service'
+  );
+  mockSpacePermissions = [
+    { id: 12, name: 'Donation.Delete', description: 'Disabled', isDeleted: true },
+  ];
+  expect((await searchSpacePermissionsService(1, 10, 'Donation.Delete')).items).toEqual([]);
+  mockSpacePermissions = [];
+  expect((await getSpacePermissionsOnlyService()).items).toEqual([]);
 });

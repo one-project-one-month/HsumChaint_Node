@@ -177,7 +177,7 @@ export const clearRolePermissionsCache = async (roleId?: number): Promise<void> 
 };
 
 export const isSystemAdminRoleId = (roleId?: number): boolean => {
-  return roleId === 1 || roleId === 3;
+  return roleId === 3;
 };
 
 /**

@@ -5,21 +5,18 @@ import { logger } from '../src/utils/logger';
 export const SYSTEM_ROLES = [
   {
     id: 1,
-    name: 'Admin',
-    description:
-      'Full administrative oversight. Manages system roles, permissions, and all user accounts.',
+    name: 'Monk',
+    description: 'Religious administrators who create and manage monastery spaces.',
   },
   {
     id: 2,
-    name: 'Monk',
-    description:
-      'Religious administrators who can create and manage Monastery Spaces, manage donors, and configure donation schedules.',
+    name: 'Donor',
+    description: 'Donors who browse monasteries and manage their donations.',
   },
   {
     id: 3,
-    name: 'User',
-    description:
-      'Donors and devotees who browse monasteries, submit donation requests, and track their personal donations.',
+    name: 'Admin',
+    description: 'Full administrative oversight of system roles, permissions, and user accounts.',
   },
 ];
 
@@ -129,7 +126,7 @@ export const SPACE_PERMISSIONS = [
   },
 ];
 
-async function seedRbac() {
+export async function seedRbac() {
   logger.info('Seeding System Roles and Permissions...');
 
   // 1. Seed System Roles
@@ -167,7 +164,7 @@ async function seedRbac() {
   const assignSysPermissions = async (roleId: number, permNames: string[]) => {
     for (const name of permNames) {
       const permissionId = sysPermMap.get(name);
-      if (!permissionId) continue;
+      if (!permissionId) throw new Error(`Unknown system permission: ${name}`);
 
       const existing = await prisma.rolePermission.findFirst({
         where: { roleId, permissionId },
@@ -180,11 +177,11 @@ async function seedRbac() {
     }
   };
 
-  // Admin (Role ID 1): Full administrative oversight (All System Permissions)
-  await assignSysPermissions(1, SYSTEM_PERMISSIONS);
+  // Admin (Role ID 3): Full administrative oversight (All System Permissions)
+  await assignSysPermissions(3, SYSTEM_PERMISSIONS);
 
-  // Monk (Role ID 2): Religious administrator (Monastery Spaces, Donors, Schedules)
-  await assignSysPermissions(2, [
+  // Monk (Role ID 1): Religious administrator (Monastery Spaces, Donors, Schedules)
+  await assignSysPermissions(1, [
     'User.View',
     'Donor.View',
     'Monastery.View',
@@ -195,8 +192,8 @@ async function seedRbac() {
     ...DONATION_PERMISSIONS,
   ]);
 
-  // User (Role ID 3): Donors and devotees (View monasteries, donation requests, track donations)
-  await assignSysPermissions(3, [
+  // Donor (Role ID 2): Donors and devotees (View monasteries, donation requests, track donations)
+  await assignSysPermissions(2, [
     'User.View',
     'Donor.View',
     'Monastery.View',
@@ -255,7 +252,7 @@ async function seedRbac() {
   const assignSpacePermissions = async (spaceRoleId: number, permNames: string[]) => {
     for (const name of permNames) {
       const spacePermissionId = spacePermMap.get(name);
-      if (!spacePermissionId) continue;
+      if (!spacePermissionId) throw new Error(`Unknown space permission: ${name}`);
 
       const existing = await prisma.spaceRolePermission.findFirst({
         where: { spaceRoleId, spacePermissionId },
@@ -280,16 +277,17 @@ async function seedRbac() {
     SPACE_PERMISSIONS.filter((p) => p.name !== 'Space.Delete').map((p) => p.name)
   );
 
-  // Editor (Space Role ID 3): Accountant/clerk (View, Post, Donation Create/Review)
+  // Editor (Space Role ID 3): Record, schedule, and complete donations
   await assignSpacePermissions(3, [
     'Space.View',
-    'Space.Post.Create',
-    'Space.Donation.Create',
-    'Space.Donation.Review',
+    'Donation.View',
+    'Donation.Create',
+    'Donation.Review',
+    'Donation.Schedule',
   ]);
 
   // Viewer (Space Role ID 4): Member/donor (View donation lists and monastery space details)
-  await assignSpacePermissions(4, ['Space.View']);
+  await assignSpacePermissions(4, ['Space.View', 'Donation.View']);
 
   logger.info('RBAC seeding complete: 3 System Roles, 4 Space Roles, and permissions assigned.');
 }
@@ -300,29 +298,29 @@ async function userSeeder() {
   logger.info('Seeding default users...');
   const password = await Bun.password.hash('password123');
 
-  // Admin user (Role ID 1)
+  // Admin user (Role ID 3)
   await prisma.user.upsert({
     where: { phone: '09999999999' },
-    update: { roleId: 1 },
+    update: { roleId: 3 },
     create: {
       phone: '09999999999',
       name: 'SuperAdmin',
       password,
       email: 'admin@hsumchaint.org',
-      roleId: 1,
+      roleId: 3,
     },
   });
 
-  // Default Monk User (Role ID 2)
+  // Default Monk User (Role ID 1)
   await prisma.user.upsert({
     where: { phone: '09111111111' },
-    update: { roleId: 2 },
+    update: { roleId: 1 },
     create: {
       phone: '09111111111',
       name: 'U Thuzana (Monk)',
       password,
       email: 'monk@hsumchaint.org',
-      roleId: 2,
+      roleId: 1,
       monkProfile: {
         create: {
           monasteryName: 'Mahasi Sasana Yeiktha',
@@ -332,7 +330,7 @@ async function userSeeder() {
     },
   });
 
-  // Test users (Role ID 2 for Monk, 3 for User)
+  // Test users (Role ID 1 for Monk, 2 for Donor)
   for (let i = 0; i < 5; i++) {
     const phone = `0912345678${i}`;
     await prisma.user.upsert({
@@ -343,7 +341,7 @@ async function userSeeder() {
         name: `testUser${i}`,
         password,
         email: `test${i}@gmail.com`,
-        roleId: i % 2 === 0 ? 2 : 3,
+        roleId: i % 2 === 0 ? 1 : 2,
       },
     });
   }
@@ -351,12 +349,13 @@ async function userSeeder() {
   logger.info('Seeding finished successfully.');
 }
 
-userSeeder()
-  .then(async () => {
-    await prisma.$disconnect();
-  })
-  .catch(async (e) => {
-    console.error(e);
-    await prisma.$disconnect();
-    process.exit(1);
-  });
+if (import.meta.main)
+  userSeeder()
+    .then(async () => {
+      await prisma.$disconnect();
+    })
+    .catch(async (e) => {
+      console.error(e);
+      await prisma.$disconnect();
+      process.exit(1);
+    });

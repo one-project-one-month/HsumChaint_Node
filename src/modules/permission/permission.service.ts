@@ -41,50 +41,13 @@ export const PREDEFINED_SYSTEM_PERMISSIONS = [
  * Ensures all 20 predefined system permissions are persisted in the database
  */
 export const ensureSystemPermissionsInDb = async (): Promise<void> => {
-  if (typeof prisma.permission?.findFirst !== 'function') return;
-  for (let i = 0; i < PREDEFINED_SYSTEM_PERMISSIONS.length; i++) {
-    const name = PREDEFINED_SYSTEM_PERMISSIONS[i];
-    const id = i + 1;
-
-    try {
-      const existingByName = await prisma.permission.findFirst({
-        where: { name },
-      });
-
-      if (existingByName) {
-        if (existingByName.isDeleted) {
-          await prisma.permission.update({
-            where: { id: existingByName.id },
-            data: { isDeleted: false },
-          });
-        }
-        continue;
-      }
-
-      const existingById = await prisma.permission.findUnique({
-        where: { id },
-      });
-
-      if (!existingById) {
-        await prisma.permission.create({
-          data: {
-            id,
-            name,
-            isDeleted: false,
-          },
-        });
-      } else {
-        await prisma.permission.update({
-          where: { id },
-          data: {
-            name,
-            isDeleted: false,
-          },
-        });
-      }
-    } catch {
-      // Fallback in case of mock or db issue
-    }
+  // Permission IDs may already be referenced by role grants; initialize by name only.
+  for (const name of PREDEFINED_SYSTEM_PERMISSIONS) {
+    await prisma.permission.upsert({
+      where: { name },
+      update: {},
+      create: { name, isDeleted: false },
+    });
   }
 };
 
