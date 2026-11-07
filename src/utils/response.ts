@@ -16,12 +16,18 @@ export interface PaginationMeta {
   hasNextPage: boolean;
 }
 
+export interface CursorPaginationMeta {
+  nextCursor: number | null;
+  hasNextPage: boolean;
+  pageSize: number;
+}
+
 export interface GenericResponse<T = unknown> {
   isSuccess: boolean;
   message: string;
   isFailure: boolean;
   data?: T;
-  pagination?: PaginationMeta;
+  pagination?: PaginationMeta | CursorPaginationMeta;
   error?: unknown;
 }
 
@@ -76,6 +82,23 @@ export const sendPaginatedResponse = <T>(
   data: T,
   pagination: PaginationMeta,
   message = 'Operation completed successfully.',
+  statusCode = 200
+) => {
+  const response: GenericResponse<T> = {
+    isSuccess: true,
+    message,
+    isFailure: false,
+    data,
+    pagination,
+  };
+  return res.status(statusCode).json(response);
+};
+
+export const sendCursorPaginatedResponse = <T>(
+  res: Response,
+  data: T,
+  pagination: CursorPaginationMeta,
+  message = 'Feed retrieved successfully.',
   statusCode = 200
 ) => {
   const response: GenericResponse<T> = {

@@ -1,3 +1,4 @@
+import type { Prisma } from 'prisma-client';
 import { prisma } from '@/lib/prisma';
 import { getSpaceRolePermissions } from '@/middlewares/permissionMiddleware';
 import { AppError } from '@/utils/AppError';
@@ -21,6 +22,42 @@ export interface MonasterySpaceDto {
   currentUserRoleName: string | null;
   isOwner: boolean;
   permissions: string[];
+}
+
+export interface PublicMonasteryCatalogDto {
+  id: number;
+  monasteryName: string;
+  description: string | null;
+  address: string | null;
+  createdByName: string | null;
+  membersCount: number;
+}
+
+export interface PublicMonasteryFeedDto {
+  id: number;
+  monasteryName: string;
+  description: string | null;
+  address: string | null;
+  createdById: number | null;
+}
+
+export interface UserSpacePermissionsDto {
+  spaceId: number;
+  userId: number;
+  isOwner: boolean;
+  spaceRoleId: number | null;
+  spaceRoleName: string | null;
+  permissions: string[];
+}
+
+interface MonasteryWithCount {
+  id: number;
+  monasteryName: string;
+  description: string | null;
+  address: string | null;
+  createdBy?: { name: string | null } | null;
+  _count?: { members: number } | null;
+  members?: unknown[];
 }
 
 /**
@@ -362,15 +399,283 @@ export const getMonasteryService = async (
 };
 
 /**
+ * Public Monastery Catalog Listing (matching C# PublicCatalog: offset pagination, [AllowAnonymous])
+ */
+export const getPublicMonasteriesCatalogService = async (
+  pagination: { pageNumber?: number; pageSize?: number; page?: number; limit?: number } = {}
+) => {
+  const pageNumber =
+    pagination.pageNumber && pagination.pageNumber > 0
+      ? pagination.pageNumber
+      : pagination.page && pagination.page > 0
+        ? pagination.page
+        : 1;
+  const pageSize =
+    pagination.pageSize && pagination.pageSize > 0
+      ? pagination.pageSize
+      : pagination.limit && pagination.limit > 0
+        ? pagination.limit
+        : 10;
+  const skip = (pageNumber - 1) * pageSize;
+
+  const where = { isDeleted: false };
+
+  const [monasteries, total] = await Promise.all([
+    prisma.monasterySpace.findMany({
+      where,
+      skip,
+      take: pageSize,
+      orderBy: [{ monasteryName: 'asc' }, { id: 'asc' }],
+      include: {
+        createdBy: {
+          select: { name: true },
+        },
+        _count: {
+          select: { members: true },
+        },
+      },
+    }),
+    prisma.monasterySpace.count({ where }),
+  ]);
+
+  const items: PublicMonasteryCatalogDto[] = (monasteries as unknown as MonasteryWithCount[]).map(
+    (m) => ({
+      id: m.id,
+      monasteryName: m.monasteryName,
+      description: m.description ?? null,
+      address: m.address ?? null,
+      createdByName: m.createdBy?.name ?? null,
+      membersCount: m._count?.members ?? (Array.isArray(m.members) ? m.members.length : 0),
+    })
+  );
+
+  const totalPages = Math.ceil(total / pageSize);
+  const hasPreviousPage = pageNumber > 1;
+  const hasNextPage = pageNumber < totalPages;
+
+  return {
+    items,
+    total,
+    pageNumber,
+    pageSize,
+    totalPages,
+    hasPreviousPage,
+    hasNextPage,
+    page: pageNumber,
+    limit: pageSize,
+    totalCount: total,
+  };
+};
+
+/**
+ * Public Monastery Catalog Feed (matching C# PublicCatalogFeed: mobile cursor pagination, [AllowAnonymous])
+ */
+export const getPublicMonasteriesFeedService = async (
+  options: { lastId?: number; pageSize?: number; limit?: number } = {}
+) => {
+  const pageSize =
+    options.pageSize && options.pageSize > 0
+      ? options.pageSize
+      : options.limit && options.limit > 0
+        ? options.limit
+        : 15;
+
+  const where: Prisma.MonasterySpaceWhereInput = {
+    isDeleted: false,
+  };
+  if (options.lastId !== undefined && options.lastId > 0) {
+    where.id = { gt: options.lastId };
+  }
+
+  const monasteries = await prisma.monasterySpace.findMany({
+    where,
+    take: pageSize + 1,
+    orderBy: { id: 'asc' },
+  });
+
+  const hasNextPage = monasteries.length > pageSize;
+  const pagedItems = hasNextPage ? monasteries.slice(0, pageSize) : monasteries;
+  const nextCursor =
+    pagedItems.length > 0 && hasNextPage ? pagedItems[pagedItems.length - 1].id : null;
+
+  const items: PublicMonasteryFeedDto[] = pagedItems.map((m) => ({
+    id: m.id,
+    monasteryName: m.monasteryName,
+    description: m.description ?? null,
+    address: m.address ?? null,
+    createdById: m.createdById ?? null,
+  }));
+
+  return {
+    items,
+    nextCursor,
+    hasNextPage,
+    pageSize,
+  };
+};
+
+/**
+ * Search Public Monasteries (matching C# SearchPublicMonasteries: offset pagination, [AllowAnonymous])
+ */
+export const searchPublicMonasteriesService = async (
+  options: {
+    keyword?: string;
+    pageNumber?: number;
+    pageSize?: number;
+    page?: number;
+    limit?: number;
+  } = {}
+) => {
+  const pageNumber =
+    options.pageNumber && options.pageNumber > 0
+      ? options.pageNumber
+      : options.page && options.page > 0
+        ? options.page
+        : 1;
+  const pageSize =
+    options.pageSize && options.pageSize > 0
+      ? options.pageSize
+      : options.limit && options.limit > 0
+        ? options.limit
+        : 10;
+  const skip = (pageNumber - 1) * pageSize;
+
+  const trimmedKeyword = options.keyword?.trim() || '';
+  const where: Prisma.MonasterySpaceWhereInput = { isDeleted: false };
+  if (trimmedKeyword) {
+    where.OR = [
+      { monasteryName: { contains: trimmedKeyword } },
+      { address: { contains: trimmedKeyword } },
+    ];
+  }
+
+  const [monasteries, total] = await Promise.all([
+    prisma.monasterySpace.findMany({
+      where,
+      skip,
+      take: pageSize,
+      orderBy: [{ monasteryName: 'asc' }, { id: 'asc' }],
+      include: {
+        createdBy: {
+          select: { name: true },
+        },
+        _count: {
+          select: { members: true },
+        },
+      },
+    }),
+    prisma.monasterySpace.count({ where }),
+  ]);
+
+  const items: PublicMonasteryCatalogDto[] = (monasteries as unknown as MonasteryWithCount[]).map(
+    (m) => ({
+      id: m.id,
+      monasteryName: m.monasteryName,
+      description: m.description ?? null,
+      address: m.address ?? null,
+      createdByName: m.createdBy?.name ?? null,
+      membersCount: m._count?.members ?? (Array.isArray(m.members) ? m.members.length : 0),
+    })
+  );
+
+  const totalPages = Math.ceil(total / pageSize);
+  const hasPreviousPage = pageNumber > 1;
+  const hasNextPage = pageNumber < totalPages;
+
+  return {
+    items,
+    total,
+    pageNumber,
+    pageSize,
+    totalPages,
+    hasPreviousPage,
+    hasNextPage,
+    page: pageNumber,
+    limit: pageSize,
+    totalCount: total,
+  };
+};
+
+/**
+ * Search Public Monasteries Feed (matching C# SearchPublicMonasteriesFeed: mobile cursor, [AllowAnonymous])
+ */
+export const searchPublicMonasteriesFeedService = async (
+  options: { keyword?: string; lastId?: number; pageSize?: number; limit?: number } = {}
+) => {
+  const pageSize =
+    options.pageSize && options.pageSize > 0
+      ? options.pageSize
+      : options.limit && options.limit > 0
+        ? options.limit
+        : 15;
+
+  const trimmedKeyword = options.keyword?.trim() || '';
+  const where: Prisma.MonasterySpaceWhereInput = {
+    isDeleted: false,
+  };
+  if (options.lastId !== undefined && options.lastId > 0) {
+    where.id = { gt: options.lastId };
+  }
+  if (trimmedKeyword) {
+    where.OR = [
+      { monasteryName: { contains: trimmedKeyword } },
+      { address: { contains: trimmedKeyword } },
+    ];
+  }
+
+  const monasteries = await prisma.monasterySpace.findMany({
+    where,
+    take: pageSize + 1,
+    orderBy: { id: 'asc' },
+  });
+
+  const hasNextPage = monasteries.length > pageSize;
+  const pagedItems = hasNextPage ? monasteries.slice(0, pageSize) : monasteries;
+  const nextCursor =
+    pagedItems.length > 0 && hasNextPage ? pagedItems[pagedItems.length - 1].id : null;
+
+  const items: PublicMonasteryFeedDto[] = pagedItems.map((m) => ({
+    id: m.id,
+    monasteryName: m.monasteryName,
+    description: m.description ?? null,
+    address: m.address ?? null,
+    createdById: m.createdById ?? null,
+  }));
+
+  return {
+    items,
+    nextCursor,
+    hasNextPage,
+    pageSize,
+  };
+};
+
+/**
  * Get My Monasteries (matching C# GetMyMonasteries, or all monasteries for System Admin)
  */
 export const getMyMonasteriesService = async (
   currentUserId: number,
-  pagination: { page?: number; limit?: number; search?: string },
+  pagination: {
+    page?: number;
+    limit?: number;
+    pageNumber?: number;
+    pageSize?: number;
+    search?: string;
+  } = {},
   currentUserRoleId?: number
 ) => {
-  const page = pagination.page && pagination.page > 0 ? pagination.page : 1;
-  const limit = pagination.limit && pagination.limit > 0 ? pagination.limit : 10;
+  const page =
+    pagination.pageNumber && pagination.pageNumber > 0
+      ? pagination.pageNumber
+      : pagination.page && pagination.page > 0
+        ? pagination.page
+        : 1;
+  const limit =
+    pagination.pageSize && pagination.pageSize > 0
+      ? pagination.pageSize
+      : pagination.limit && pagination.limit > 0
+        ? pagination.limit
+        : 10;
   const skip = (page - 1) * limit;
 
   const isAdmin = await checkIsAdmin(currentUserId, currentUserRoleId);
@@ -443,7 +748,22 @@ export const getMyMonasteriesService = async (
       };
     });
 
-    return { items, total, page, limit, totalPages: Math.ceil(total / limit) };
+    const totalPages = Math.ceil(total / limit);
+    const hasPreviousPage = page > 1;
+    const hasNextPage = page < totalPages;
+
+    return {
+      items,
+      total,
+      page,
+      limit,
+      pageNumber: page,
+      pageSize: limit,
+      totalCount: total,
+      totalPages,
+      hasPreviousPage,
+      hasNextPage,
+    };
   }
 
   const whereClause: {
@@ -508,7 +828,152 @@ export const getMyMonasteriesService = async (
     };
   });
 
-  return { items, total, page, limit, totalPages: Math.ceil(total / limit) };
+  const totalPages = Math.ceil(total / limit);
+  const hasPreviousPage = page > 1;
+  const hasNextPage = page < totalPages;
+
+  return {
+    items,
+    total,
+    page,
+    limit,
+    pageNumber: page,
+    pageSize: limit,
+    totalCount: total,
+    totalPages,
+    hasPreviousPage,
+    hasNextPage,
+  };
+};
+
+/**
+ * Get My Monasteries Feed (matching C# GetMyMonasteriesFeed: mobile cursor)
+ */
+export const getMyMonasteriesFeedService = async (
+  currentUserId: number,
+  options: { lastId?: number; pageSize?: number; limit?: number } = {},
+  currentUserRoleId?: number
+) => {
+  const pageSize =
+    options.pageSize && options.pageSize > 0
+      ? options.pageSize
+      : options.limit && options.limit > 0
+        ? options.limit
+        : 15;
+
+  const isAdmin = await checkIsAdmin(currentUserId, currentUserRoleId);
+
+  if (isAdmin) {
+    const spaceWhere: Prisma.MonasterySpaceWhereInput = {
+      isDeleted: false,
+    };
+    if (options.lastId !== undefined && options.lastId > 0) {
+      spaceWhere.id = { gt: options.lastId };
+    }
+
+    const spaces = await prisma.monasterySpace.findMany({
+      where: spaceWhere,
+      take: pageSize + 1,
+      orderBy: { id: 'asc' },
+      include: {
+        members: {
+          where: { userId: currentUserId },
+          include: { spaceRole: true },
+        },
+      },
+    });
+
+    const hasNextPage = spaces.length > pageSize;
+    const pagedSpaces = hasNextPage ? spaces.slice(0, pageSize) : spaces;
+    const nextCursor =
+      pagedSpaces.length > 0 && hasNextPage ? pagedSpaces[pagedSpaces.length - 1].id : null;
+
+    const items: MonasterySpaceDto[] = pagedSpaces.map((s) => {
+      const myMembership = s.members && s.members.length > 0 ? s.members[0] : null;
+      return {
+        id: s.id,
+        monasteryName: s.monasteryName,
+        description: s.description,
+        address: s.address,
+        createdById: s.createdById,
+        currentUserRoleId: myMembership ? myMembership.spaceRoleId : null,
+        currentUserRoleName: myMembership?.spaceRole?.name ?? 'Admin',
+        isOwner: myMembership ? myMembership.isOwner : false,
+        permissions: [...SPACE_PERMISSIONS],
+      };
+    });
+
+    return {
+      items,
+      nextCursor,
+      hasNextPage,
+      pageSize,
+    };
+  }
+
+  const whereClause: Prisma.MonasteryMemberWhereInput = {
+    userId: currentUserId,
+    monasterySpace: {
+      isDeleted: false,
+    },
+  };
+  if (options.lastId !== undefined && options.lastId > 0) {
+    whereClause.monasterySpaceId = { gt: options.lastId };
+  }
+
+  const memberships = await prisma.monasteryMember.findMany({
+    where: whereClause,
+    take: pageSize + 1,
+    include: {
+      monasterySpace: true,
+      spaceRole: true,
+    },
+    orderBy: { monasterySpaceId: 'asc' },
+  });
+
+  const hasNextPage = memberships.length > pageSize;
+  const pagedMemberships = hasNextPage ? memberships.slice(0, pageSize) : memberships;
+  const nextCursor =
+    pagedMemberships.length > 0 && hasNextPage
+      ? pagedMemberships[pagedMemberships.length - 1].monasterySpace.id
+      : null;
+
+  const distinctRoleIds = Array.from(
+    new Set(
+      pagedMemberships
+        .map((m) => m.spaceRoleId)
+        .filter((id): id is number => typeof id === 'number')
+    )
+  );
+  const rolePermMap = new Map<number, string[]>();
+  await Promise.all(
+    distinctRoleIds.map(async (id) => {
+      rolePermMap.set(id, await getSpaceRolePermissions(id));
+    })
+  );
+
+  const items: MonasterySpaceDto[] = pagedMemberships.map((m) => {
+    const perms = m.isOwner ? [...SPACE_PERMISSIONS] : (rolePermMap.get(m.spaceRoleId) ?? []);
+
+    return {
+      id: m.monasterySpace.id,
+      monasteryName: m.monasterySpace.monasteryName,
+      description: m.monasterySpace.description,
+      address: m.monasterySpace.address,
+      createdById: m.monasterySpace.createdById,
+      currentUserRoleId: m.spaceRoleId,
+      currentUserRoleName: m.spaceRole?.name ?? null,
+      isOwner: m.isOwner,
+      permissions: perms,
+    };
+  });
+
+  return {
+    items,
+    nextCursor,
+    hasNextPage,
+    pageSize,
+  };
 };
 
 /**
@@ -709,7 +1174,7 @@ export const respondToInvitationService = async (
 export const getMembersService = async (
   currentUserId: number,
   monasterySpaceId: number,
-  pagination: { page?: number; limit?: number },
+  pagination: { page?: number; limit?: number; pageNumber?: number; pageSize?: number } = {},
   currentUserRoleId?: number
 ) => {
   const monastery = await prisma.monasterySpace.findFirst({
@@ -726,8 +1191,18 @@ export const getMembersService = async (
     throw new AppError('User is not a member of this monastery.', 403);
   }
 
-  const page = pagination.page && pagination.page > 0 ? pagination.page : 1;
-  const limit = pagination.limit && pagination.limit > 0 ? pagination.limit : 10;
+  const page =
+    pagination.pageNumber && pagination.pageNumber > 0
+      ? pagination.pageNumber
+      : pagination.page && pagination.page > 0
+        ? pagination.page
+        : 1;
+  const limit =
+    pagination.pageSize && pagination.pageSize > 0
+      ? pagination.pageSize
+      : pagination.limit && pagination.limit > 0
+        ? pagination.limit
+        : 10;
   const skip = (page - 1) * limit;
 
   const [memberships, total] = await Promise.all([
@@ -788,7 +1263,22 @@ export const getMembersService = async (
     };
   });
 
-  return { items, total, page, limit, totalPages: Math.ceil(total / limit) };
+  const totalPages = Math.ceil(total / limit);
+  const hasPreviousPage = page > 1;
+  const hasNextPage = page < totalPages;
+
+  return {
+    items,
+    total,
+    page,
+    limit,
+    pageNumber: page,
+    pageSize: limit,
+    totalCount: total,
+    totalPages,
+    hasPreviousPage,
+    hasNextPage,
+  };
 };
 
 /**
@@ -944,9 +1434,55 @@ export interface SpaceRoleDto {
 }
 
 /**
+ * Get current user space permissions (matching C# GetCurrentUserSpacePermissions)
+ */
+export const getCurrentUserSpacePermissionsService = async (
+  currentUserId: number,
+  monasterySpaceId: number,
+  currentUserRoleId?: number
+): Promise<UserSpacePermissionsDto> => {
+  const monastery = await prisma.monasterySpace.findFirst({
+    where: { id: monasterySpaceId, isDeleted: false },
+  });
+  if (!monastery) {
+    throw new AppError('Monastery not found.', 404);
+  }
+
+  const member = await getMember(currentUserId, monasterySpaceId);
+  const isAdmin = await checkIsAdmin(currentUserId, currentUserRoleId);
+
+  if (!member && !isAdmin) {
+    throw new AppError('User is not a member of this monastery.', 403);
+  }
+
+  const isOwner = member?.isOwner ?? false;
+  const spaceRoleId = member?.spaceRoleId ?? (isAdmin ? SPACE_ROLES.SPACE_ADMIN : null);
+  const spaceRoleName = member?.spaceRole?.name ?? (isAdmin ? 'Admin' : null);
+  const permissions = await resolveSpacePermissions(spaceRoleId, isOwner, isAdmin);
+
+  return {
+    spaceId: monasterySpaceId,
+    userId: currentUserId,
+    isOwner,
+    spaceRoleId,
+    spaceRoleName,
+    permissions,
+  };
+};
+
+/**
  * Get all available space roles with their permissions
  */
-export const getSpaceRolesService = async (): Promise<SpaceRoleDto[]> => {
+export const getSpaceRolesService = async (monasterySpaceId?: number): Promise<SpaceRoleDto[]> => {
+  if (monasterySpaceId) {
+    const space = await prisma.monasterySpace.findFirst({
+      where: { id: monasterySpaceId, isDeleted: false },
+    });
+    if (!space) {
+      throw new AppError('Monastery not found.', 404);
+    }
+  }
+
   const roles = await prisma.spaceRole.findMany({
     where: { isDeleted: false },
     orderBy: { id: 'asc' },

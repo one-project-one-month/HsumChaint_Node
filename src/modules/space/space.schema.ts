@@ -30,9 +30,60 @@ export const spaceIdParamSchema = z.object({
   }),
 });
 
+export const catalogPaginationSchema = z.object({
+  query: z.object({
+    pageNumber: z.coerce.number().int().positive().optional().default(1),
+    pageSize: z.coerce.number().int().positive().max(100).optional().default(10),
+    page: z.coerce.number().int().positive().optional(),
+    limit: z.coerce.number().int().positive().max(100).optional(),
+    search: z.string().trim().optional(),
+  }),
+});
+
+export const cursorFeedSchema = z.object({
+  query: z.object({
+    lastId: z.coerce.number().int().nonnegative().optional(),
+    pageSize: z.coerce.number().int().positive().max(100).optional().default(15),
+    limit: z.coerce.number().int().positive().max(100).optional(),
+  }),
+});
+
+export const searchMonasteriesSchema = z.object({
+  query: z.object({
+    keyword: z.string().trim().optional().default(''),
+    pageNumber: z.coerce.number().int().positive().optional().default(1),
+    pageSize: z.coerce.number().int().positive().max(100).optional().default(10),
+    page: z.coerce.number().int().positive().optional(),
+    limit: z.coerce.number().int().positive().max(100).optional(),
+  }),
+});
+
+export const searchFeedSchema = z.object({
+  query: z.object({
+    keyword: z.string().trim().optional().default(''),
+    lastId: z.coerce.number().int().nonnegative().optional(),
+    pageSize: z.coerce.number().int().positive().max(100).optional().default(15),
+    limit: z.coerce.number().int().positive().max(100).optional(),
+  }),
+});
+
+export const membersPaginationSchema = z.object({
+  params: z.object({
+    id: z.coerce.number().int().positive('Invalid space ID'),
+  }),
+  query: z.object({
+    pageNumber: z.coerce.number().int().positive().optional().default(1),
+    pageSize: z.coerce.number().int().positive().max(100).optional().default(10),
+    page: z.coerce.number().int().positive().optional(),
+    limit: z.coerce.number().int().positive().max(100).optional(),
+  }),
+});
+
 export const spacePaginationSchema = z.object({
   query: PaginationQuerySchema.extend({
     search: z.string().trim().optional(),
+    pageNumber: z.coerce.number().int().positive().optional(),
+    pageSize: z.coerce.number().int().positive().max(100).optional(),
   }),
 });
 
@@ -81,10 +132,16 @@ export const respondInvitationSchema = z.object({
 });
 
 export const updateMemberRoleSchema = z.object({
-  params: z.object({
-    id: z.coerce.number().int().positive('Invalid space ID'),
-    userId: z.coerce.number().int().positive('Invalid user ID'),
-  }),
+  params: z
+    .object({
+      id: z.coerce.number().int().positive('Invalid space ID'),
+      userId: z.coerce.number().int().positive('Invalid user ID').optional(),
+      memberUserId: z.coerce.number().int().positive('Invalid member user ID').optional(),
+    })
+    .refine((data) => data.userId !== undefined || data.memberUserId !== undefined, {
+      message: 'userId or memberUserId is required',
+      path: ['userId'],
+    }),
   body: z
     .object({
       spaceRoleId: z.coerce.number().int().positive().optional(),
@@ -97,10 +154,16 @@ export const updateMemberRoleSchema = z.object({
 });
 
 export const removeMemberSchema = z.object({
-  params: z.object({
-    id: z.coerce.number().int().positive('Invalid space ID'),
-    userId: z.coerce.number().int().positive('Invalid user ID'),
-  }),
+  params: z
+    .object({
+      id: z.coerce.number().int().positive('Invalid space ID'),
+      userId: z.coerce.number().int().positive('Invalid user ID').optional(),
+      memberUserId: z.coerce.number().int().positive('Invalid member user ID').optional(),
+    })
+    .refine((data) => data.userId !== undefined || data.memberUserId !== undefined, {
+      message: 'userId or memberUserId is required',
+      path: ['userId'],
+    }),
 });
 
 export type CreateSpaceInput = z.infer<typeof createSpaceSchema>['body'];

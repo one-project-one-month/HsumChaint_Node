@@ -3,14 +3,20 @@ import { SPACE_ROLES } from '../space.permissions';
 import {
   createMonasteryService,
   deleteMonasteryService,
+  getCurrentUserSpacePermissionsService,
   getMembersService,
   getMonasteryService,
+  getMyMonasteriesFeedService,
   getMyMonasteriesService,
+  getPublicMonasteriesCatalogService,
+  getPublicMonasteriesFeedService,
   getSpaceRoleByIdService,
   getSpaceRolesService,
   inviteMemberService,
   removeMemberService,
   respondToInvitationService,
+  searchPublicMonasteriesFeedService,
+  searchPublicMonasteriesService,
   updateMemberRoleService,
   updateMonasteryService,
 } from '../space.service';
@@ -151,7 +157,64 @@ mock.module('@/lib/prisma', () => ({
         mockSpaces.push(space);
         return space;
       }),
-      findMany: mock(async () => mockSpaces.filter((s) => !s.isDeleted)),
+      findMany: mock(
+        async (args?: {
+          where?: any;
+          skip?: number;
+          take?: number;
+          include?: any;
+          orderBy?: any;
+        }) => {
+          let list = mockSpaces.filter((s) => !s.isDeleted);
+          if (args?.where) {
+            if (args.where.id?.gt !== undefined) {
+              list = list.filter((s) => s.id > args.where.id.gt);
+            }
+            if (args.where.OR && Array.isArray(args.where.OR)) {
+              list = list.filter((s) =>
+                args.where.OR.some((cond: any) => {
+                  if (cond.monasteryName?.contains) {
+                    return s.monasteryName
+                      .toLowerCase()
+                      .includes(cond.monasteryName.contains.toLowerCase());
+                  }
+                  if (cond.address?.contains) {
+                    return (s.address ?? '')
+                      .toLowerCase()
+                      .includes(cond.address.contains.toLowerCase());
+                  }
+                  if (cond.description?.contains) {
+                    return (s.description ?? '')
+                      .toLowerCase()
+                      .includes(cond.description.contains.toLowerCase());
+                  }
+                  return false;
+                })
+              );
+            }
+          }
+          const skip = args?.skip ?? 0;
+          if (skip > 0) {
+            list = list.slice(skip);
+          }
+          if (args?.take !== undefined) {
+            list = list.slice(0, args.take);
+          }
+          if (args?.include?.createdBy || args?.include?._count) {
+            return list.map((s) => {
+              const creator = mockUsers.find((u) => u.id === s.createdById);
+              return {
+                ...s,
+                createdBy: creator ? { name: creator.name } : null,
+                _count: {
+                  members: mockMembers.filter((m) => m.monasterySpaceId === s.id).length,
+                },
+              };
+            });
+          }
+          return list;
+        }
+      ),
       findUnique: mock(async ({ where }: { where: { id: number } }) => {
         return mockSpaces.find((s) => s.id === where.id && !s.isDeleted) ?? null;
       }),
@@ -175,7 +238,32 @@ mock.module('@/lib/prisma', () => ({
         if (index === -1) throw new Error('Not found');
         return mockSpaces.splice(index, 1)[0];
       }),
-      count: mock(async () => mockSpaces.filter((s) => !s.isDeleted).length),
+      count: mock(async (args?: { where?: any }) => {
+        let list = mockSpaces.filter((s) => !s.isDeleted);
+        if (args?.where?.OR && Array.isArray(args.where.OR)) {
+          list = list.filter((s) =>
+            args.where.OR.some((cond: any) => {
+              if (cond.monasteryName?.contains) {
+                return s.monasteryName
+                  .toLowerCase()
+                  .includes(cond.monasteryName.contains.toLowerCase());
+              }
+              if (cond.address?.contains) {
+                return (s.address ?? '')
+                  .toLowerCase()
+                  .includes(cond.address.contains.toLowerCase());
+              }
+              if (cond.description?.contains) {
+                return (s.description ?? '')
+                  .toLowerCase()
+                  .includes(cond.description.contains.toLowerCase());
+              }
+              return false;
+            })
+          );
+        }
+        return list.length;
+      }),
     },
     monasteryMember: {
       create: mock(
@@ -237,33 +325,50 @@ mock.module('@/lib/prisma', () => ({
         }
       ),
       findMany: mock(
-        async ({
-          where,
-        }: {
+        async (args: {
           where: {
             userId?: number;
-            monasterySpaceId?: number;
+            monasterySpaceId?: number | { gt?: number };
             user?: { isDeleted?: boolean };
           };
+          take?: number;
+          skip?: number;
+          include?: any;
+          orderBy?: any;
         }) => {
-          return mockMembers
-            .filter((m) => {
-              const user = mockUsers.find((u) => u.id === m.userId);
-              if (where.user?.isDeleted !== undefined && user?.isDeleted !== where.user.isDeleted) {
-                return false;
+          const { where } = args;
+          let list = mockMembers.filter((m) => {
+            const user = mockUsers.find((u) => u.id === m.userId);
+            if (where.user?.isDeleted !== undefined && user?.isDeleted !== where.user.isDeleted) {
+              return false;
+            }
+            if (where.userId !== undefined && m.userId !== where.userId) {
+              return false;
+            }
+            if (where.monasterySpaceId !== undefined) {
+              if (typeof where.monasterySpaceId === 'number') {
+                if (m.monasterySpaceId !== where.monasterySpaceId) return false;
+              } else if (
+                typeof where.monasterySpaceId === 'object' &&
+                where.monasterySpaceId?.gt !== undefined
+              ) {
+                if (m.monasterySpaceId <= where.monasterySpaceId.gt) return false;
               }
-              return (
-                (where.userId === undefined || m.userId === where.userId) &&
-                (where.monasterySpaceId === undefined ||
-                  m.monasterySpaceId === where.monasterySpaceId)
-              );
-            })
-            .map((m) => ({
-              ...m,
-              user: mockUsers.find((u) => u.id === m.userId),
-              monasterySpace: mockSpaces.find((s) => s.id === m.monasterySpaceId),
-              spaceRole: mockSpaceRoles.find((sr) => sr.id === m.spaceRoleId),
-            }));
+            }
+            return true;
+          });
+          if (args.skip && args.skip > 0) {
+            list = list.slice(args.skip);
+          }
+          if (args.take !== undefined) {
+            list = list.slice(0, args.take);
+          }
+          return list.map((m) => ({
+            ...m,
+            user: mockUsers.find((u) => u.id === m.userId),
+            monasterySpace: mockSpaces.find((s) => s.id === m.monasterySpaceId),
+            spaceRole: mockSpaceRoles.find((sr) => sr.id === m.spaceRoleId),
+          }));
         }
       ),
       update: mock(
@@ -1142,6 +1247,143 @@ describe('Monastery Service Unit Tests (matching C# HsumChaint)', () => {
 
     it('should throw 404 if space role not found', async () => {
       expect(getSpaceRoleByIdService(999)).rejects.toThrow('Space role not found.');
+    });
+  });
+
+  describe('Public Catalog, Feeds, Search & Permissions', () => {
+    it('should retrieve public monasteries catalog with creator and members count', async () => {
+      await createMonasteryService(1, {
+        monasteryName: 'Kyauk Gu Monastery',
+        description: 'Historical cave monastery',
+        address: 'Bagan, Mandalay Region',
+      });
+      await createMonasteryService(1, {
+        monasteryName: 'Mahagandhayon Monastery',
+        description: 'Monastic study center',
+        address: 'Amarapura, Mandalay',
+      });
+
+      const result = await getPublicMonasteriesCatalogService({ pageNumber: 1, pageSize: 10 });
+      expect(result.items.length).toBe(2);
+      expect(result.total).toBe(2);
+      expect(result.items[0].monasteryName).toBe('Kyauk Gu Monastery');
+      expect(result.items[0].createdByName).toBe('Sayadaw U Thila');
+      expect(result.items[0].membersCount).toBe(1);
+      expect(result.pageNumber).toBe(1);
+      expect(result.pageSize).toBe(10);
+      expect(result.totalPages).toBe(1);
+      expect(result.hasPreviousPage).toBe(false);
+      expect(result.hasNextPage).toBe(false);
+    });
+
+    it('should retrieve public monasteries feed with cursor pagination', async () => {
+      await createMonasteryService(1, { monasteryName: 'Monastery 1' });
+      await createMonasteryService(1, { monasteryName: 'Monastery 2' });
+      await createMonasteryService(1, { monasteryName: 'Monastery 3' });
+
+      // Request batch of 2
+      const batch1 = await getPublicMonasteriesFeedService({ pageSize: 2 });
+      expect(batch1.items.length).toBe(2);
+      expect(batch1.hasNextPage).toBe(true);
+      expect(batch1.nextCursor).toBe(batch1.items[1].id);
+
+      // Request next batch
+      const batch2 = await getPublicMonasteriesFeedService({
+        lastId: batch1.nextCursor ?? undefined,
+        pageSize: 2,
+      });
+      expect(batch2.items.length).toBe(1);
+      expect(batch2.hasNextPage).toBe(false);
+      expect(batch2.nextCursor).toBe(null);
+    });
+
+    it('should search public monasteries by keyword', async () => {
+      await createMonasteryService(1, {
+        monasteryName: 'Kyauk Gu Monastery',
+        address: 'Bagan, Mandalay Region',
+      });
+      await createMonasteryService(1, {
+        monasteryName: 'Mahagandhayon Monastery',
+        address: 'Amarapura, Mandalay',
+      });
+
+      const searchName = await searchPublicMonasteriesService({
+        keyword: 'Kyauk',
+        pageNumber: 1,
+        pageSize: 10,
+      });
+      expect(searchName.items.length).toBe(1);
+      expect(searchName.items[0].monasteryName).toBe('Kyauk Gu Monastery');
+
+      const searchAddress = await searchPublicMonasteriesService({
+        keyword: 'Amarapura',
+        pageNumber: 1,
+        pageSize: 10,
+      });
+      expect(searchAddress.items.length).toBe(1);
+      expect(searchAddress.items[0].monasteryName).toBe('Mahagandhayon Monastery');
+    });
+
+    it('should search public monasteries feed with cursor pagination', async () => {
+      await createMonasteryService(1, {
+        monasteryName: 'Bagan Temple 1',
+        address: 'Bagan',
+      });
+      await createMonasteryService(1, {
+        monasteryName: 'Bagan Temple 2',
+        address: 'Bagan',
+      });
+      await createMonasteryService(1, {
+        monasteryName: 'Mandalay Temple',
+        address: 'Mandalay',
+      });
+
+      const feed = await searchPublicMonasteriesFeedService({
+        keyword: 'Bagan',
+        pageSize: 1,
+      });
+      expect(feed.items.length).toBe(1);
+      expect(feed.items[0].monasteryName).toBe('Bagan Temple 1');
+      expect(feed.hasNextPage).toBe(true);
+    });
+
+    it('should retrieve my monasteries feed for member', async () => {
+      const space1 = await createMonasteryService(1, { monasteryName: 'My Space 1' });
+      const space2 = await createMonasteryService(1, { monasteryName: 'My Space 2' });
+
+      const feed = await getMyMonasteriesFeedService(1, { pageSize: 1 });
+      expect(feed.items.length).toBe(1);
+      expect(feed.items[0].id).toBe(space1.id);
+      expect(feed.hasNextPage).toBe(true);
+
+      const feedPage2 = await getMyMonasteriesFeedService(1, {
+        lastId: feed.nextCursor ?? undefined,
+        pageSize: 1,
+      });
+      expect(feedPage2.items.length).toBe(1);
+      expect(feedPage2.items[0].id).toBe(space2.id);
+      expect(feedPage2.hasNextPage).toBe(false);
+    });
+
+    it('should retrieve current user space permissions for space owner', async () => {
+      const space = await createMonasteryService(1, { monasteryName: 'Perm Space' });
+
+      const perms = await getCurrentUserSpacePermissionsService(1, space.id);
+      expect(perms.spaceId).toBe(space.id);
+      expect(perms.userId).toBe(1);
+      expect(perms.isOwner).toBe(true);
+      expect(perms.spaceRoleId).toBe(SPACE_ROLES.SPACE_ADMIN);
+      expect(perms.permissions.includes('Space.Delete')).toBe(true);
+      expect(perms.permissions.includes('Space.View')).toBe(true);
+    });
+
+    it('should reject permissions lookup if user is not a space member', async () => {
+      const space = await createMonasteryService(1, { monasteryName: 'Perm Space 2' });
+
+      // User 2 is not a member and not system admin
+      await expect(getCurrentUserSpacePermissionsService(2, space.id, 2)).rejects.toThrow(
+        'User is not a member of this monastery.'
+      );
     });
   });
 });
