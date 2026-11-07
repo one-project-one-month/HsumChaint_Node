@@ -22,6 +22,9 @@ const normalizePhoneFields = (data: unknown) => {
     if (!obj.phone && typeof obj.phoneNumber === 'string') {
       obj.phone = obj.phoneNumber;
     }
+    if (!obj.phone && typeof obj.identifier === 'string') {
+      obj.phone = obj.identifier;
+    }
     if (!obj.contactPhone && typeof obj.contactPhoneNumber === 'string') {
       obj.contactPhone = obj.contactPhoneNumber;
     }
@@ -44,7 +47,7 @@ export const registerSchema = z.object({
         avatar: z.string().optional(),
         password: passwordSchema,
         // System roles: 1: Monk, 2: Donor
-        roleId: z.union([z.literal(1), z.literal(2)]),
+        roleId: z.coerce.number().int().positive(),
         monasteryName: z.string().optional(),
         monasteryAddress: z.string().optional(),
         fcmToken: z.string().optional(),
@@ -68,6 +71,29 @@ export const registerSchema = z.object({
           });
         }
       }
+
+      // Role ID 2 is Donor: Donors cannot add monastery name or address
+      if (data.roleId === 2) {
+        if (
+          (data.monasteryName && data.monasteryName.trim() !== '') ||
+          (data.monasteryAddress && data.monasteryAddress.trim() !== '')
+        ) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: 'Donors cannot have monastery name or monastery address',
+            path: ['monasteryName'],
+          });
+        }
+      }
+
+      // Any role other than 1 or 2 (Public registration only allows Monk: 1 or Donor: 2)
+      if (data.roleId !== 1 && data.roleId !== 2) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: data.roleId === 3 ? 'Forbidden' : 'Invalid role',
+          path: ['roleId'],
+        });
+      }
     }),
 });
 
@@ -77,16 +103,26 @@ export const loginSchema = z.object({
     z.object({
       phone: phoneSchema,
       phoneNumber: z.string().optional(),
+      identifier: z.string().optional(),
       password: passwordSchema,
     })
   ),
 });
 
-export const refreshTokenSchema = z
+export const refreshTokenSchema = z.object({
+  body: z.object({
+    userId: z.coerce.number({ required_error: 'userId is required' }),
+    refreshToken: z
+      .string({ required_error: 'refreshToken is required' })
+      .min(1, 'refreshToken is required'),
+  }),
+});
+
+export const logoutSchema = z
   .object({
     body: z.object({
       refreshToken: z.string().optional(),
-      userId: z.union([z.number(), z.string().transform(Number)]).optional(),
+      userId: z.coerce.number().optional(),
     }),
     cookies: z.object({
       refreshToken: z.string().optional(),
@@ -117,5 +153,6 @@ export const resetPasswordSchema = z.object({
 export type RegisterInput = z.infer<typeof registerSchema>['body'];
 export type LoginInput = z.infer<typeof loginSchema>['body'];
 export type RefreshTokenInput = z.infer<typeof refreshTokenSchema>['body'];
+export type LogoutInput = z.infer<typeof logoutSchema>['body'];
 export type forgotPasswordInput = z.infer<typeof forgotPasswordSchema>['body'];
 export type resetPasswordInput = z.infer<typeof resetPasswordSchema>['body'];
