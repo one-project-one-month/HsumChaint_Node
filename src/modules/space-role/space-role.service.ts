@@ -2,6 +2,7 @@ import { prisma } from '@/lib/prisma';
 import { clearSpaceRolePermissionsCache } from '@/middlewares/permissionMiddleware';
 import { AppError } from '@/utils/AppError';
 import { type FormattedPermission, formatPermission } from '../permission/permission.service';
+import { ensureSpacePermissionsInDb } from '../space-permission/space-permission.service';
 import type {
   AssignSpacePermissionsInput,
   CreateSpaceRoleInput,
@@ -69,6 +70,38 @@ const stripsOwnerPermissions = async (desiredIds: number[]): Promise<boolean> =>
   if (allActive.length === 0) return false;
   const desired = new Set(desiredIds);
   return allActive.some((p) => !desired.has(p.id));
+};
+
+export const validateSpacePermissions = async (permissionIds: number[]): Promise<void> => {
+  if (permissionIds.length === 0) return;
+
+  let validCount = await prisma.spacePermission.count({
+    where: {
+      id: { in: permissionIds },
+      isDeleted: false,
+    },
+  });
+
+  if (
+    validCount !== permissionIds.length &&
+    typeof prisma.spacePermission?.findFirst === 'function'
+  ) {
+    try {
+      await ensureSpacePermissionsInDb();
+      validCount = await prisma.spacePermission.count({
+        where: {
+          id: { in: permissionIds },
+          isDeleted: false,
+        },
+      });
+    } catch {
+      // Mock environment fallback
+    }
+  }
+
+  if (validCount !== permissionIds.length) {
+    throw new AppError('One or more space permissions are invalid or inactive', 400);
+  }
 };
 
 // =========================================================================
@@ -216,17 +249,7 @@ export const createSpaceRoleService = async (data: CreateSpaceRoleInput): Promis
   }
 
   const permissionIds = Array.from(new Set(data.permissionIds || []));
-  if (permissionIds.length > 0) {
-    const validCount = await prisma.spacePermission.count({
-      where: {
-        id: { in: permissionIds },
-        isDeleted: false,
-      },
-    });
-    if (validCount !== permissionIds.length) {
-      throw new AppError('One or more space permissions are invalid or inactive', 400);
-    }
-  }
+  await validateSpacePermissions(permissionIds);
 
   const created = await prisma.$transaction(async (tx) => {
     const role = await tx.spaceRole.create({
@@ -309,18 +332,7 @@ export const updateSpaceRoleService = async (
   let permissionIds: number[] | undefined;
   if (data.permissionIds !== undefined) {
     permissionIds = Array.from(new Set(data.permissionIds));
-
-    if (permissionIds.length > 0) {
-      const validCount = await prisma.spacePermission.count({
-        where: {
-          id: { in: permissionIds },
-          isDeleted: false,
-        },
-      });
-      if (validCount !== permissionIds.length) {
-        throw new AppError('One or more space permissions are invalid or inactive', 400);
-      }
-    }
+    await validateSpacePermissions(permissionIds);
   }
 
   const updated = await prisma.$transaction(async (tx) => {
@@ -429,17 +441,7 @@ export const assignSpacePermissionsService = async (data: AssignSpacePermissions
     );
   }
 
-  if (distinctIds.length > 0) {
-    const validCount = await prisma.spacePermission.count({
-      where: {
-        id: { in: distinctIds },
-        isDeleted: false,
-      },
-    });
-    if (validCount !== distinctIds.length) {
-      throw new AppError('One or more space permissions are invalid or inactive', 400);
-    }
-  }
+  await validateSpacePermissions(distinctIds);
 
   await prisma.$transaction(async (tx) => {
     await tx.spaceRolePermission.deleteMany({

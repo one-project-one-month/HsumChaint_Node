@@ -17,6 +17,63 @@ export const PREDEFINED_SPACE_PERMISSIONS = [
   { name: 'Donation.Delete', description: 'Delete donation records' },
 ] as const;
 
+/**
+ * Ensures all 12 predefined space permissions are persisted in the database
+ */
+export const ensureSpacePermissionsInDb = async (): Promise<void> => {
+  if (typeof prisma.spacePermission?.findFirst !== 'function') return;
+  for (let i = 0; i < PREDEFINED_SPACE_PERMISSIONS.length; i++) {
+    const sp = PREDEFINED_SPACE_PERMISSIONS[i];
+    const id = i + 1;
+
+    try {
+      // 1. Check if permission with target name already exists
+      const existingByName = await prisma.spacePermission.findFirst({
+        where: { name: sp.name },
+      });
+
+      if (existingByName) {
+        if (existingByName.isDeleted || existingByName.description !== sp.description) {
+          await prisma.spacePermission.update({
+            where: { id: existingByName.id },
+            data: { isDeleted: false, description: sp.description },
+          });
+        }
+        continue;
+      }
+
+      // 2. Check if target ID is occupied
+      const existingById = await prisma.spacePermission.findUnique({
+        where: { id },
+      });
+
+      if (!existingById) {
+        // Free slot: insert with the exact predefined ID (1..12)
+        await prisma.spacePermission.create({
+          data: {
+            id,
+            name: sp.name,
+            description: sp.description,
+            isDeleted: false,
+          },
+        });
+      } else {
+        // Target ID is occupied by an obsolete legacy permission name: update it to the new name
+        await prisma.spacePermission.update({
+          where: { id },
+          data: {
+            name: sp.name,
+            description: sp.description,
+            isDeleted: false,
+          },
+        });
+      }
+    } catch {
+      // Fallback in case of race condition or mock
+    }
+  }
+};
+
 // =========================================================================
 // Architectural Rule: Strict Separation of Get and Search for Space Permissions
 // =========================================================================
@@ -27,14 +84,26 @@ export const PREDEFINED_SPACE_PERMISSIONS = [
 export const getSpacePermissionsOnlyService = async (pageNumber = 1, pageSize = 10) => {
   const skip = (pageNumber - 1) * pageSize;
 
+  let totalCount = await prisma.spacePermission.count({ where: { isDeleted: false } });
+
+  if (
+    totalCount < PREDEFINED_SPACE_PERMISSIONS.length &&
+    typeof prisma.spacePermission?.findFirst === 'function'
+  ) {
+    try {
+      await ensureSpacePermissionsInDb();
+      totalCount = await prisma.spacePermission.count({ where: { isDeleted: false } });
+    } catch {
+      // Mock environment or DB connection issue
+    }
+  }
+
   let permissions = await prisma.spacePermission.findMany({
     where: { isDeleted: false },
     skip,
     take: pageSize,
     orderBy: { id: 'asc' },
   });
-
-  let totalCount = await prisma.spacePermission.count({ where: { isDeleted: false } });
 
   // Fallback to predefined space permissions if database/mock table is empty
   if (totalCount === 0) {

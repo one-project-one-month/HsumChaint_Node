@@ -92,32 +92,40 @@ export const SPACE_PERMISSIONS = [
     description: 'Delete monastery space',
   },
   {
-    name: 'Space.Member.Invite',
+    name: 'Space.InviteMember',
     description: 'Invite new members to the monastery space',
   },
   {
-    name: 'Space.Member.Manage',
-    description: 'Manage existing member statuses and roles',
-  },
-  {
-    name: 'Space.Member.Remove',
-    description: 'Remove members from the monastery space',
-  },
-  {
-    name: 'Space.Role.Manage',
+    name: 'Space.UpdateMemberRole',
     description: 'Assign or change member roles within space',
   },
   {
-    name: 'Space.Post.Create',
-    description: 'Create updates and posts in space',
+    name: 'Space.RemoveMember',
+    description: 'Remove members from the monastery space',
   },
   {
-    name: 'Space.Donation.Create',
+    name: 'Donation.View',
+    description: 'View donation entries and reports',
+  },
+  {
+    name: 'Donation.Create',
     description: 'Submit donation entries in space',
   },
   {
-    name: 'Space.Donation.Review',
+    name: 'Donation.Review',
     description: 'Approve, reject, or mark donations completed',
+  },
+  {
+    name: 'Donation.Schedule',
+    description: 'Schedule donation dates or intervals',
+  },
+  {
+    name: 'Donation.Cancel',
+    description: 'Cancel donation requests',
+  },
+  {
+    name: 'Donation.Delete',
+    description: 'Delete donation records',
   },
 ];
 

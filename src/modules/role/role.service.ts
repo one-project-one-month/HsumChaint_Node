@@ -2,6 +2,7 @@ import { prisma } from '@/lib/prisma';
 import { clearRolePermissionsCache } from '@/middlewares/permissionMiddleware';
 import { AppError } from '@/utils/AppError';
 import {
+  ensureSystemPermissionsInDb,
   type FormattedPermission,
   formatPermission,
   getPermissionsOnlyService,
@@ -207,6 +208,35 @@ export const getRoleByIdService = async (id: number): Promise<FormattedRole> => 
   return mapRoleToDto(role, role.rolePermissions);
 };
 
+export const validateSystemPermissions = async (permissionIds: number[]): Promise<void> => {
+  if (permissionIds.length === 0) return;
+
+  let validCount = await prisma.permission.count({
+    where: {
+      id: { in: permissionIds },
+      isDeleted: false,
+    },
+  });
+
+  if (validCount !== permissionIds.length && typeof prisma.permission?.findFirst === 'function') {
+    try {
+      await ensureSystemPermissionsInDb();
+      validCount = await prisma.permission.count({
+        where: {
+          id: { in: permissionIds },
+          isDeleted: false,
+        },
+      });
+    } catch {
+      // Mock environment fallback
+    }
+  }
+
+  if (validCount !== permissionIds.length) {
+    throw new AppError('One or more permissions are invalid or inactive', 400);
+  }
+};
+
 /**
  * 46. Create a new custom role with optional permissions
  */
@@ -234,17 +264,7 @@ export const createRoleService = async (data: CreateRoleInput): Promise<Formatte
 
   // Validate permission IDs if provided
   const permissionIds = Array.from(new Set(data.permissionIds || []));
-  if (permissionIds.length > 0) {
-    const validCount = await prisma.permission.count({
-      where: {
-        id: { in: permissionIds },
-        isDeleted: false,
-      },
-    });
-    if (validCount !== permissionIds.length) {
-      throw new AppError('One or more permissions are invalid or inactive', 400);
-    }
-  }
+  await validateSystemPermissions(permissionIds);
 
   // Transactionally create role and permissions
   const created = await prisma.$transaction(async (tx) => {
@@ -328,18 +348,7 @@ export const updateRoleService = async (
   let permissionIds: number[] | undefined;
   if (data.permissionIds !== undefined) {
     permissionIds = Array.from(new Set(data.permissionIds));
-
-    if (permissionIds.length > 0) {
-      const validCount = await prisma.permission.count({
-        where: {
-          id: { in: permissionIds },
-          isDeleted: false,
-        },
-      });
-      if (validCount !== permissionIds.length) {
-        throw new AppError('One or more permissions are invalid or inactive', 400);
-      }
-    }
+    await validateSystemPermissions(permissionIds);
   }
 
   // Perform update in transaction
@@ -442,17 +451,7 @@ export const assignPermissionsService = async (data: AssignPermissionsInput) => 
     throw new AppError('Permissions assigned to the Admin role cannot be removed.', 400);
   }
 
-  if (distinctIds.length > 0) {
-    const validCount = await prisma.permission.count({
-      where: {
-        id: { in: distinctIds },
-        isDeleted: false,
-      },
-    });
-    if (validCount !== distinctIds.length) {
-      throw new AppError('One or more permissions are invalid or inactive', 400);
-    }
-  }
+  await validateSystemPermissions(distinctIds);
 
   await prisma.$transaction(async (tx) => {
     await tx.rolePermission.deleteMany({
