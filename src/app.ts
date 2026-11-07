@@ -44,6 +44,7 @@ app.use(cookieParser());
 app.use(httpLogger);
 
 // Routes
+app.use('/api/user', userRouter);
 app.use('/api/v1/users', userRouter);
 app.use('/api/v1/monasteries', spaceRouter);
 app.use('/api/v1/spaces', spaceRouter);
