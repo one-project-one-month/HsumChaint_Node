@@ -9,9 +9,9 @@ import {
 } from './notification.controller';
 import {
   createNotificationSchema,
+  deleteNotificationSchema,
   getNotificationsSchema,
   markNotificationAsReadSchema,
-  notificationIdParamSchema,
 } from './notification.schema';
 
 const router = Router();
@@ -19,7 +19,8 @@ router.use(authMiddleware);
 
 router.post('/create', validator(createNotificationSchema), createNotification);
 router.get('/', validator(getNotificationsSchema), getUserNotifications);
-router.put('/:id', validator(markNotificationAsReadSchema), markNotificationAsRead);
-router.delete('/:id', validator(notificationIdParamSchema), deleteNotification);
+router.patch('/read-noti', validator(markNotificationAsReadSchema), markNotificationAsRead);
+router.delete('/delete', validator(deleteNotificationSchema), deleteNotification);
+router.delete('/:id', validator(deleteNotificationSchema), deleteNotification);
 
 export { router as notificationRouter };
