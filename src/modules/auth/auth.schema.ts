@@ -111,9 +111,9 @@ export const loginSchema = z.object({
 
 export const refreshTokenSchema = z.object({
   body: z.object({
-    userId: z.coerce.number({ required_error: 'userId is required' }),
+    userId: z.coerce.number({ error: 'userId is required' }),
     refreshToken: z
-      .string({ required_error: 'refreshToken is required' })
+      .string({ error: 'refreshToken is required' })
       .min(1, 'refreshToken is required'),
   }),
 });

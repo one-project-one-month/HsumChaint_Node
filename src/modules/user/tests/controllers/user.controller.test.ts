@@ -88,7 +88,13 @@ mock.module('@/lib/prisma', () => ({
 
 interface MockResponse {
   statusCode: number;
-  body: Record<string, unknown>;
+  body: {
+    isSuccess?: boolean;
+    isFailure?: boolean;
+    message?: string;
+    data?: Record<string, unknown>;
+    pagination?: Record<string, unknown>;
+  };
   status: (code: number) => MockResponse;
   json: (payload: unknown) => MockResponse;
 }
@@ -130,9 +136,9 @@ describe('UserController Unit Test (Mocking & Direct Execution)', () => {
     expect(res.statusCode).toBe(200);
     expect(res.body.isSuccess).toBe(true);
     expect(res.body.message).toBe('Success');
-    expect(res.body.data.id).toBe(FAKE_USER_ID);
-    expect(res.body.data.roleName).toBe('Monk');
-    expect(res.body.data.phoneNumber).toBe('09111111111');
+    expect(res.body.data?.id).toBe(FAKE_USER_ID);
+    expect(res.body.data?.roleName).toBe('Monk');
+    expect(res.body.data?.phoneNumber).toBe('09111111111');
   });
 
   it('GET /api/user/:id - should return profile by ID', async () => {
@@ -150,7 +156,7 @@ describe('UserController Unit Test (Mocking & Direct Execution)', () => {
     await getUserById(req, res, next);
 
     expect(res.statusCode).toBe(200);
-    expect(res.body.data.id).toBe(FAKE_USER_ID);
+    expect(res.body.data?.id).toBe(FAKE_USER_ID);
   });
 
   it('GET /api/user - should return paginated users in PagedResult envelope', async () => {
@@ -173,8 +179,8 @@ describe('UserController Unit Test (Mocking & Direct Execution)', () => {
     expect(res.body.message).toBe('Success');
     expect(Array.isArray(res.body.data)).toBe(true);
     expect(res.body.pagination).toBeDefined();
-    expect(res.body.pagination.pageNumber).toBe(1);
-    expect(res.body.pagination.totalCount).toBe(1);
+    expect(res.body.pagination?.pageNumber).toBe(1);
+    expect(res.body.pagination?.totalCount).toBe(1);
   });
 
   it('PUT /api/user - should update user profile successfully', async () => {
@@ -198,7 +204,7 @@ describe('UserController Unit Test (Mocking & Direct Execution)', () => {
     expect(res.statusCode).toBe(200);
     expect(res.body.isSuccess).toBe(true);
     expect(res.body.message).toBe('User updated successfully.');
-    expect(res.body.data.name).toBe('Updated Name');
+    expect(res.body.data?.name).toBe('Updated Name');
   });
 
   it('DELETE /api/user/:id - should soft delete user and return void Result envelope', async () => {
@@ -239,7 +245,7 @@ describe('UserController Unit Test (Mocking & Direct Execution)', () => {
     await getMonkProfile(req, res, next);
 
     expect(res.statusCode).toBe(200);
-    expect(res.body.data.monasteryName).toBe('Test Monastery');
+    expect(res.body.data?.monasteryName).toBe('Test Monastery');
   });
 
   it('PATCH /api/user/:id/monk-profile - should update monk profile', async () => {
@@ -337,7 +343,7 @@ describe('UserController Unit Test (Mocking & Direct Execution)', () => {
 
     expect(res.statusCode).toBe(200);
     expect(res.body.isSuccess).toBe(true);
-    expect(res.body.pagination.pageSize).toBe(15);
+    expect(res.body.pagination?.pageSize).toBe(15);
   });
 
   it('GET /api/user/:id/notification - should return notifications with PagedResult', async () => {
@@ -360,7 +366,7 @@ describe('UserController Unit Test (Mocking & Direct Execution)', () => {
 
     expect(res.statusCode).toBe(200);
     expect(res.body.isSuccess).toBe(true);
-    expect(res.body.pagination.totalPages).toBe(1);
+    expect(res.body.pagination?.totalPages).toBe(1);
   });
 
   it('GET /api/user/:id/notification/feed - should return notifications with CursorPagedResult', async () => {
@@ -380,7 +386,7 @@ describe('UserController Unit Test (Mocking & Direct Execution)', () => {
 
     expect(res.statusCode).toBe(200);
     expect(res.body.isSuccess).toBe(true);
-    expect(res.body.pagination.hasNextPage).toBe(false);
+    expect(res.body.pagination?.hasNextPage).toBe(false);
   });
 
   it('DELETE /api/user/:id/notification - should clear notifications and return void Result', async () => {
@@ -420,7 +426,7 @@ describe('UserController Unit Test (Mocking & Direct Execution)', () => {
     await getUserSettings(req, res, next);
 
     expect(res.statusCode).toBe(200);
-    expect(res.body.data.userId).toBe(FAKE_USER_ID);
+    expect(res.body.data?.userId).toBe(FAKE_USER_ID);
   });
 
   it('PUT /api/user/:id/settings - should update user settings', async () => {

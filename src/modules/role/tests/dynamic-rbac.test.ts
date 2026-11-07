@@ -656,7 +656,12 @@ describe('Dynamic Space RBAC & Space Permissions (/api/v1/space-roles, /api/v1/s
       .set('Authorization', `Bearer ${adminToken}`);
     expect(ownerDeleteRes.status).toBe(400);
 
-    mockSpaceRoles.push({ id: 25, name: 'Temporary Space Role', isDeleted: false });
+    mockSpaceRoles.push({
+      id: 25,
+      name: 'Temporary Space Role',
+      description: null,
+      isDeleted: false,
+    });
     const res = await request(app)
       .delete('/api/v1/space-roles/25')
       .set('Authorization', `Bearer ${adminToken}`);

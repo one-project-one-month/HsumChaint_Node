@@ -1,28 +1,26 @@
 import { beforeEach, describe, expect, it, mock } from 'bun:test';
-import { prisma } from '@/lib/prisma';
 import { loginUser, refreshTokenService, registerUser } from './auth.service';
 
 const mockRedisStore = new Map<string, string>();
 
-mock.module('@/lib/prisma', () => ({
-  prisma: {
-    user: {
-      findFirst: mock(async () => null),
-      findUnique: mock(async () => null),
-      create: mock(async () => null),
-      update: mock(async () => null),
-    },
-    role: {
-      findUnique: mock(async () => ({ id: 1, name: 'Monk' })),
-    },
-    refreshToken: {
-      findUnique: mock(async () => null),
-      create: mock(async () => null),
-      update: mock(async () => null),
-    },
-    $transaction: mock(async (cb: (tx: unknown) => Promise<unknown>) => cb({})),
+const prisma = {
+  user: {
+    findFirst: async (): Promise<unknown> => null,
+    findUnique: async (): Promise<unknown> => null,
+    create: async (): Promise<unknown> => null,
+    update: async (): Promise<unknown> => null,
   },
-}));
+  role: { findUnique: async (): Promise<unknown> => null },
+  refreshToken: {
+    findFirst: async (): Promise<unknown> => null,
+    findUnique: async (): Promise<unknown> => null,
+    create: async (): Promise<unknown> => null,
+    update: async (): Promise<unknown> => null,
+  },
+  $transaction: async (callback: (tx: unknown) => Promise<unknown>): Promise<unknown> =>
+    callback(prisma),
+};
+mock.module('@/lib/prisma', () => ({ prisma }));
 
 mock.module('@/lib/redis', () => ({
   redis: {

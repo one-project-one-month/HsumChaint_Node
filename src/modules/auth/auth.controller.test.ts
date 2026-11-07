@@ -1,6 +1,5 @@
 import { beforeEach, describe, expect, it, mock } from 'bun:test';
 import type { Request, Response } from 'express';
-import { prisma } from '@/lib/prisma';
 import { getLoginMode, login, refreshAccessToken, register } from './auth.controller';
 import type { LoginInput, RefreshTokenInput, RegisterInput } from './auth.schema';
 
@@ -36,39 +35,29 @@ mock.module('@/middlewares/permissionMiddleware', () => ({
   }),
 }));
 
-mock.module('@/lib/prisma', () => {
-  const fakePrisma = {
-    user: {
-      findFirst: mock(async () => null),
-      findUnique: mock(async () => null),
-      create: mock(async () => null),
-      update: mock(async () => null),
-      count: mock(async () => 0),
-    },
-    role: {
-      findUnique: mock(async () => null),
-    },
-    monkProfile: {
-      create: mock(async () => null),
-    },
-    refreshToken: {
-      findFirst: mock(async () => null),
-      update: mock(async () => null),
-    },
-    passwordResetToken: {
-      create: mock(async () => null),
-      findUnique: mock(async () => null),
-      delete: mock(async () => null),
-    },
-    $transaction: mock(async (cbOrPromises: unknown) => {
-      if (typeof cbOrPromises === 'function') {
-        return cbOrPromises(fakePrisma);
-      }
-      return Promise.all(cbOrPromises as Promise<unknown>[]);
-    }),
-  };
-  return { prisma: fakePrisma };
-});
+const prisma = {
+  user: {
+    findFirst: async (): Promise<unknown> => null,
+    findUnique: async (): Promise<unknown> => null,
+    create: async (): Promise<unknown> => null,
+    update: async (): Promise<unknown> => null,
+    count: async () => 0,
+  },
+  role: { findUnique: async (): Promise<unknown> => null },
+  monkProfile: { create: async (): Promise<unknown> => null },
+  refreshToken: {
+    findFirst: async (): Promise<unknown> => null,
+    update: async (): Promise<unknown> => null,
+  },
+  passwordResetToken: {
+    create: async (): Promise<unknown> => null,
+    findUnique: async (): Promise<unknown> => null,
+    delete: async (): Promise<unknown> => null,
+  },
+  $transaction: async (callback: (tx: unknown) => Promise<unknown>): Promise<unknown> =>
+    callback(prisma),
+};
+mock.module('@/lib/prisma', () => ({ prisma }));
 
 mock.module('@/helper/createAuthSession', () => ({
   createAuthSession: mock(async (_prismaClient: unknown, userId: number, roleId: number) => ({
@@ -79,7 +68,12 @@ mock.module('@/helper/createAuthSession', () => ({
 
 interface MockResponse {
   statusCode: number;
-  body: Record<string, unknown>;
+  body: {
+    isSuccess?: boolean;
+    isFailure?: boolean;
+    message?: string;
+    data?: Record<string, unknown>;
+  };
   headers: Record<string, string>;
   cookies: Record<string, unknown>;
   status: (code: number) => MockResponse;
@@ -247,10 +241,10 @@ describe('Auth Controller Tests (.NET Alignment)', () => {
         refreshToken: 'mock_jwt_refresh_token_1_3',
       });
       // Ensure extra legacy fields are removed
-      expect(res.body.data.token).toBeUndefined();
-      expect(res.body.data.userId).toBeUndefined();
-      expect(res.body.data.phone).toBeUndefined();
-      expect(res.body.data.user).toBeUndefined();
+      expect(res.body.data?.token).toBeUndefined();
+      expect(res.body.data?.userId).toBeUndefined();
+      expect(res.body.data?.phone).toBeUndefined();
+      expect(res.body.data?.user).toBeUndefined();
     });
 
     it('forwards 400 Bad Request with "Phone number or password incorrect!" on failed login', async () => {
@@ -327,7 +321,7 @@ describe('Auth Controller Tests (.NET Alignment)', () => {
         accessToken: 'mock_jwt_access_token_2_1',
         refreshToken: 'mock_jwt_refresh_token_2_1',
       });
-      expect(res.body.data.token).toBeUndefined();
+      expect(res.body.data?.token).toBeUndefined();
     });
 
     it('rejects incorrect refreshToken with 400 Bad Request', async () => {

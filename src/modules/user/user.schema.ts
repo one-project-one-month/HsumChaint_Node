@@ -110,7 +110,7 @@ export const updateUserSchema = z.object({
         path: ['oldPassword'],
       }
     )
-    .transform((b) => ({
+    .transform((b): typeof b => ({
       ...b,
       phone: b.phone ?? b.phoneNumber,
       phoneNumber: b.phoneNumber ?? b.phone,

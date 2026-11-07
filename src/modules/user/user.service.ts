@@ -1,4 +1,4 @@
-import type { Prisma } from 'prisma-client';
+import type { MonkProfile, Prisma } from 'prisma-client';
 import { prisma } from '@/lib/prisma';
 import { redis } from '@/lib/redis';
 import { AppError } from '@/utils/AppError';
@@ -48,7 +48,7 @@ export const mapUserDto = (user: {
   contactPhone?: string | null;
   createdAt?: Date;
   avatar?: string | null;
-  monkProfile?: unknown;
+  monkProfile?: MonkProfile | null;
 }) => ({
   id: user.id,
   name: user.name,
