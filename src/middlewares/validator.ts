@@ -31,9 +31,11 @@ export const validator =
     } catch (error: unknown) {
       // Handle Zod Validation Errors
       if (error instanceof ZodError) {
+        const primaryMessage = error.issues[0]?.message || 'Validation Error';
         return res.status(400).json({
-          success: false,
-          message: 'Validation Error',
+          isSuccess: false,
+          message: primaryMessage,
+          isFailure: true,
           error: error.issues.map((e) => ({
             path: e.path.join('.'),
             message: e.message,
@@ -45,8 +47,9 @@ export const validator =
       console.error('[Validator Error]:', error);
 
       return res.status(500).json({
-        success: false,
+        isSuccess: false,
         message: 'Internal Server Error',
+        isFailure: true,
         error: null,
       });
     }
