@@ -387,6 +387,17 @@ export const requireSpacePermission = (requiredPermission: string, spaceIdParamN
           ? requiredPermission.slice(6)
           : `Space.${requiredPermission}`,
       ];
+      if (requiredPermission === 'Space.InviteMember' || requiredPermission === 'InviteMember')
+        permAliases.push('Space.Member.Invite');
+      if (
+        requiredPermission === 'Space.UpdateMemberRole' ||
+        requiredPermission === 'UpdateMemberRole'
+      )
+        permAliases.push('Space.Role.Manage', 'Space.Member.Manage');
+      if (requiredPermission === 'Space.RemoveMember' || requiredPermission === 'RemoveMember')
+        permAliases.push('Space.Member.Remove');
+      if (requiredPermission === 'Space.ViewMembers' || requiredPermission === 'ViewMembers')
+        permAliases.push('Space.View');
       if (requiredPermission.includes('Donation.View')) permAliases.push('Space.View');
       if (requiredPermission.includes('Donation.Create')) permAliases.push('Space.Donation.Create');
       if (requiredPermission.includes('Donation.Review')) permAliases.push('Space.Donation.Review');
