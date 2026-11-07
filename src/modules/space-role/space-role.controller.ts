@@ -1,5 +1,5 @@
 import type { NextFunction, Request, Response } from 'express';
-import { pagedSuccessResponse, successResponse } from '@/utils/response';
+import { sendPaginatedResponse, sendSuccessResponse } from '@/utils/response';
 import type {
   AssignSpacePermissionsInput,
   CreateSpaceRoleInput,
@@ -36,13 +36,16 @@ export const getSpaceRoles = async (req: Request, res: Response, next: NextFunct
 
     const result = await getSpaceRolesService(queryData);
 
-    return pagedSuccessResponse(
+    return sendPaginatedResponse(
       res,
       result.items,
       {
         pageNumber: result.pageNumber,
         pageSize: result.pageSize,
         totalCount: result.totalCount,
+        totalPages: result.totalPages,
+        hasPreviousPage: result.pageNumber > 1,
+        hasNextPage: result.pageNumber < result.totalPages,
       },
       'Space roles retrieved successfully.'
     );
@@ -61,7 +64,7 @@ export const getSpaceRoleById = async (req: Request, res: Response, next: NextFu
   try {
     const roleId = Number(req.params.id);
     const role = await getSpaceRoleByIdService(roleId);
-    return successResponse(res, role, 'Space role retrieved successfully.');
+    return sendSuccessResponse(res, role, 'Space role retrieved successfully.');
   } catch (err) {
     next(err);
   }
@@ -77,7 +80,7 @@ export const createSpaceRole = async (req: Request, res: Response, next: NextFun
   try {
     const data = req.body as CreateSpaceRoleInput;
     const role = await createSpaceRoleService(data);
-    return successResponse(res, role, 'Space role created successfully.', 201);
+    return sendSuccessResponse(res, role, 'Space role created successfully.', 201);
   } catch (err) {
     next(err);
   }
@@ -94,7 +97,7 @@ export const updateSpaceRole = async (req: Request, res: Response, next: NextFun
     const roleId = Number(req.params.id);
     const data = req.body as UpdateSpaceRoleInput;
     const role = await updateSpaceRoleService(roleId, data);
-    return successResponse(res, role, 'Space role updated successfully.');
+    return sendSuccessResponse(res, role, 'Space role updated successfully.');
   } catch (err) {
     next(err);
   }
@@ -110,7 +113,7 @@ export const deleteSpaceRole = async (req: Request, res: Response, next: NextFun
   try {
     const roleId = Number(req.params.id);
     const result = await deleteSpaceRoleService(roleId);
-    return successResponse(res, result, result.message);
+    return sendSuccessResponse(res, result, result.message);
   } catch (err) {
     next(err);
   }
@@ -126,7 +129,7 @@ export const assignSpacePermissions = async (req: Request, res: Response, next: 
   try {
     const data = req.body as AssignSpacePermissionsInput;
     const result = await assignSpacePermissionsService(data);
-    return successResponse(res, result, 'Permissions assigned to space role successfully.');
+    return sendSuccessResponse(res, result, 'Permissions assigned to space role successfully.');
   } catch (err) {
     next(err);
   }

@@ -1,5 +1,5 @@
 import type { NextFunction, Request, Response } from 'express';
-import { pagedSuccessResponse } from '@/utils/response';
+import { sendPaginatedResponse } from '@/utils/response';
 import type { GetSpacePermissionsQueryInput } from './space-permission.schema';
 import { getSpacePermissionsService } from './space-permission.service';
 
@@ -23,13 +23,16 @@ export const getSpacePermissions = async (req: Request, res: Response, next: Nex
 
     const result = await getSpacePermissionsService(queryData);
 
-    return pagedSuccessResponse(
+    return sendPaginatedResponse(
       res,
       result.items,
       {
         pageNumber: result.pageNumber,
         pageSize: result.pageSize,
         totalCount: result.totalCount,
+        totalPages: result.totalPages,
+        hasPreviousPage: result.pageNumber > 1,
+        hasNextPage: result.pageNumber < result.totalPages,
       },
       'Space permissions retrieved successfully.'
     );

@@ -1,5 +1,5 @@
 import type { NextFunction, Request, Response } from 'express';
-import { pagedSuccessResponse, successResponse } from '@/utils/response';
+import { sendPaginatedResponse, sendSuccessResponse } from '@/utils/response';
 import type {
   AssignPermissionsInput,
   CreateRoleInput,
@@ -40,13 +40,16 @@ export const getRoles = async (req: Request, res: Response, next: NextFunction) 
 
     const result = await getRolesService(queryData);
 
-    return pagedSuccessResponse(
+    return sendPaginatedResponse(
       res,
       result.items,
       {
         pageNumber: result.pageNumber,
         pageSize: result.pageSize,
         totalCount: result.totalCount,
+        totalPages: result.totalPages,
+        hasPreviousPage: result.pageNumber > 1,
+        hasNextPage: result.pageNumber < result.totalPages,
       },
       'System roles retrieved successfully.'
     );
@@ -65,7 +68,7 @@ export const getRoleById = async (req: Request, res: Response, next: NextFunctio
   try {
     const roleId = Number(req.params.id);
     const role = await getRoleByIdService(roleId);
-    return successResponse(res, role, 'Role retrieved successfully.');
+    return sendSuccessResponse(res, role, 'Role retrieved successfully.');
   } catch (err) {
     next(err);
   }
@@ -81,7 +84,7 @@ export const createRole = async (req: Request, res: Response, next: NextFunction
   try {
     const data = req.body as CreateRoleInput;
     const role = await createRoleService(data);
-    return successResponse(res, role, 'Role created successfully.', 201);
+    return sendSuccessResponse(res, role, 'Role created successfully.', 201);
   } catch (err) {
     next(err);
   }
@@ -98,7 +101,7 @@ export const updateRole = async (req: Request, res: Response, next: NextFunction
     const roleId = Number(req.params.id);
     const data = req.body as UpdateRoleInput;
     const role = await updateRoleService(roleId, data);
-    return successResponse(res, role, 'Role updated successfully.');
+    return sendSuccessResponse(res, role, 'Role updated successfully.');
   } catch (err) {
     next(err);
   }
@@ -114,7 +117,7 @@ export const deleteRole = async (req: Request, res: Response, next: NextFunction
   try {
     const roleId = Number(req.params.id);
     const result = await deleteRoleService(roleId);
-    return successResponse(res, result, result.message);
+    return sendSuccessResponse(res, result, result.message);
   } catch (err) {
     next(err);
   }
@@ -130,7 +133,7 @@ export const assignPermissions = async (req: Request, res: Response, next: NextF
   try {
     const data = req.body as AssignPermissionsInput;
     const result = await assignPermissionsService(data);
-    return successResponse(res, result, 'Permissions assigned successfully.');
+    return sendSuccessResponse(res, result, 'Permissions assigned successfully.');
   } catch (err) {
     next(err);
   }
@@ -143,7 +146,7 @@ export const getMyPermissions = async (req: Request, res: Response, next: NextFu
   try {
     const userId = req.user.userId;
     const result = await getUserPermissionsDetailService(userId);
-    return successResponse(res, result, 'User permissions retrieved successfully.');
+    return sendSuccessResponse(res, result, 'User permissions retrieved successfully.');
   } catch (err) {
     next(err);
   }
@@ -156,7 +159,7 @@ export const getUserPermissions = async (req: Request, res: Response, next: Next
   try {
     const userId = Number(req.params.userId);
     const result = await getUserPermissionsDetailService(userId);
-    return successResponse(res, result, 'User permissions retrieved successfully.');
+    return sendSuccessResponse(res, result, 'User permissions retrieved successfully.');
   } catch (err) {
     next(err);
   }

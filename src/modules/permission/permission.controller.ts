@@ -1,5 +1,5 @@
 import type { NextFunction, Request, Response } from 'express';
-import { pagedSuccessResponse } from '@/utils/response';
+import { sendPaginatedResponse } from '@/utils/response';
 import type { GetPermissionsQueryInput } from './permission.schema';
 import { getPermissionsService } from './permission.service';
 
@@ -24,13 +24,16 @@ export const getPermissions = async (req: Request, res: Response, next: NextFunc
 
     const result = await getPermissionsService(queryData);
 
-    return pagedSuccessResponse(
+    return sendPaginatedResponse(
       res,
       result.items,
       {
         pageNumber: result.pageNumber,
         pageSize: result.pageSize,
         totalCount: result.totalCount,
+        totalPages: result.totalPages,
+        hasPreviousPage: result.pageNumber > 1,
+        hasNextPage: result.pageNumber < result.totalPages,
       },
       'System permissions retrieved successfully.'
     );
