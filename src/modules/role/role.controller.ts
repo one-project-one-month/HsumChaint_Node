@@ -1,11 +1,8 @@
 import type { NextFunction, Request, Response } from 'express';
-import { generatePaginationData } from '@/helper/paginationHelper';
-import { successResponse } from '@/utils/response';
-import { getSpaceRoleByIdService, getSpaceRolesService } from '../space/space.service';
+import { pagedSuccessResponse, successResponse } from '@/utils/response';
 import type {
   AssignPermissionsInput,
   CreateRoleInput,
-  GetPermissionsQueryInput,
   GetRolesQueryInput,
   UpdateRoleInput,
 } from './role.schema';
@@ -13,116 +10,106 @@ import {
   assignPermissionsService,
   createRoleService,
   deleteRoleService,
-  getPermissionsService,
   getRoleByIdService,
   getRolesService,
   getUserPermissionsDetailService,
   updateRoleService,
 } from './role.service';
 
+// Re-export getPermissions for backwards compatibility
+export { getPermissions } from '../permission/permission.controller';
+
+/**
+ * 44. Get System Roles
+ * GET /api/v1/roles
+ * Required Permission: Roles.View
+ * Target: System Admin
+ */
 export const getRoles = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const rawQuery = req.query as Record<string, string>;
-    const page = Number(rawQuery.page) || 1;
-    const limit = Number(rawQuery.limit) || 10;
-    const type = rawQuery.type as 'all' | 'system' | 'space' | undefined;
+    const pageNumber = Number(rawQuery.pageNumber || rawQuery.page) || 1;
+    const pageSize = Number(rawQuery.pageSize || rawQuery.limit) || 10;
+    const roleName = rawQuery.roleName || rawQuery.search;
 
     const queryData: GetRolesQueryInput = {
-      page,
-      limit,
-      roleName: rawQuery.roleName,
-      type,
+      pageNumber,
+      pageSize,
+      roleName,
     };
 
-    const [result, spaceRoles] = await Promise.all([
-      getRolesService(queryData),
-      getSpaceRolesService(),
-    ]);
+    const result = await getRolesService(queryData);
 
-    if (type === 'space') {
-      const search = queryData.roleName?.toLowerCase();
-      const filteredSpaceRoles = search
-        ? spaceRoles.filter((r) => r.roleName.toLowerCase().includes(search))
-        : spaceRoles;
-      const paginationData = generatePaginationData(req, filteredSpaceRoles.length, page, limit);
-      return successResponse(
-        res,
-        { roles: filteredSpaceRoles, paginationData },
-        'Space roles retrieved successfully'
-      );
-    }
-
-    if (type === 'all') {
-      const allRoles = [
-        ...result.items.map((r) => ({ ...r, roleScope: 'System' })),
-        ...spaceRoles.map((r) => ({ ...r, roleScope: 'Space' })),
-      ];
-      const paginationData = generatePaginationData(req, allRoles.length, page, limit);
-      return successResponse(
-        res,
-        {
-          roles: allRoles,
-          spaceRoles,
-          paginationData,
-        },
-        'Roles retrieved successfully'
-      );
-    }
-
-    const paginationData = generatePaginationData(req, result.total, page, limit);
-
-    return successResponse(
+    return pagedSuccessResponse(
       res,
+      result.items,
       {
-        roles: result.items,
-        spaceRoles,
-        paginationData,
+        pageNumber: result.pageNumber,
+        pageSize: result.pageSize,
+        totalCount: result.totalCount,
       },
-      'Roles retrieved successfully'
+      'System roles retrieved successfully.'
     );
   } catch (err) {
     next(err);
   }
 };
 
+/**
+ * 45. Get System Role by ID
+ * GET /api/v1/roles/{id}
+ * Required Permission: Roles.View
+ * Target: System Admin
+ */
 export const getRoleById = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const roleId = Number(req.params.id);
-    const type = req.query.type as string | undefined;
-
-    if (type === 'space') {
-      const spaceRole = await getSpaceRoleByIdService(roleId);
-      return successResponse(res, spaceRole, 'Space role retrieved successfully');
-    }
-
     const role = await getRoleByIdService(roleId);
-    return successResponse(res, role, 'Role retrieved successfully');
+    return successResponse(res, role, 'Role retrieved successfully.');
   } catch (err) {
     next(err);
   }
 };
 
+/**
+ * 46. Create System Role
+ * POST /api/v1/roles
+ * Required Permission: Roles.Manage
+ * Target: System Admin
+ */
 export const createRole = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const data = req.body as CreateRoleInput;
     const role = await createRoleService(data);
-    return successResponse(res, role, 'Role created successfully', 201);
+    return successResponse(res, role, 'Role created successfully.', 201);
   } catch (err) {
     next(err);
   }
 };
 
+/**
+ * 47. Update System Role
+ * PUT /api/v1/roles/{id}
+ * Required Permission: Roles.Manage
+ * Target: System Admin
+ */
 export const updateRole = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const roleId = Number(req.params.id);
     const data = req.body as UpdateRoleInput;
     const role = await updateRoleService(roleId, data);
-    return successResponse(res, role, 'Role updated successfully');
+    return successResponse(res, role, 'Role updated successfully.');
   } catch (err) {
     next(err);
   }
 };
 
+/**
+ * 48. Delete System Role
+ * DELETE /api/v1/roles/{id}
+ * Required Permission: Roles.Manage
+ * Target: System Admin
+ */
 export const deleteRole = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const roleId = Number(req.params.id);
@@ -133,57 +120,43 @@ export const deleteRole = async (req: Request, res: Response, next: NextFunction
   }
 };
 
-export const getPermissions = async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    const rawQuery = req.query as Record<string, string>;
-    const page = Number(rawQuery.page) || 1;
-    const limit = Number(rawQuery.limit) || 100;
-
-    const queryData: GetPermissionsQueryInput = {
-      page,
-      limit,
-      search: rawQuery.search,
-      module: rawQuery.module,
-    };
-
-    const result = await getPermissionsService(queryData);
-    const paginationData = generatePaginationData(req, result.total, page, limit);
-
-    return successResponse(
-      res,
-      { permissions: result.items, paginationData },
-      'Permissions retrieved successfully'
-    );
-  } catch (err) {
-    next(err);
-  }
-};
-
+/**
+ * 50. Assign Permissions to Role
+ * POST /api/v1/roles/assign-permissions
+ * Required Permission: Roles.Assign
+ * Target: System Admin
+ */
 export const assignPermissions = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const data = req.body as AssignPermissionsInput;
     const result = await assignPermissionsService(data);
-    return successResponse(res, result, 'Permissions assigned successfully');
+    return successResponse(res, result, 'Permissions assigned successfully.');
   } catch (err) {
     next(err);
   }
 };
 
+/**
+ * Backward compatibility: get my permissions
+ */
 export const getMyPermissions = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const userId = req.user.userId;
     const result = await getUserPermissionsDetailService(userId);
-    return successResponse(res, result, 'User permissions retrieved successfully');
+    return successResponse(res, result, 'User permissions retrieved successfully.');
   } catch (err) {
     next(err);
   }
 };
 
+/**
+ * Backward compatibility: get specific user permissions
+ */
 export const getUserPermissions = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const userId = Number(req.params.userId);
     const result = await getUserPermissionsDetailService(userId);
-    return successResponse(res, result, 'User permissions retrieved successfully');
+    return successResponse(res, result, 'User permissions retrieved successfully.');
   } catch (err) {
     next(err);
   }

@@ -176,10 +176,14 @@ export const clearRolePermissionsCache = async (roleId?: number): Promise<void> 
   }
 };
 
+export const isSystemAdminRoleId = (roleId?: number): boolean => {
+  return roleId === 1 || roleId === 3;
+};
+
 /**
  * Express middleware to check if the authenticated user has a specific required permission.
  *
- * @param requiredPermission The permission name (e.g., 'User.View', 'Role.Create')
+ * @param requiredPermission The permission name (e.g., 'User.View', 'Role.Create', 'Roles.View')
  */
 export const checkPermission = (requiredPermission: string) => {
   return async (req: Request, _res: Response, next: NextFunction) => {
@@ -194,10 +198,62 @@ export const checkPermission = (requiredPermission: string) => {
         return next();
       }
 
+      // SuperAdmin bypass
+      if (user.roleId === 3) {
+        return next();
+      }
+
       const permissions = await getRolePermissions(user.roleId);
 
+      // Support permission aliases between granular and group taxonomy
+      const aliases = new Set<string>([requiredPermission]);
+      if (requiredPermission === 'Roles.View' || requiredPermission === 'Role.View') {
+        aliases.add('Roles.View');
+        aliases.add('Role.View');
+      }
+      if (requiredPermission === 'Roles.Manage' || requiredPermission === 'Role.Manage') {
+        aliases.add('Roles.Manage');
+        aliases.add('Role.Manage');
+        aliases.add('Role.Create');
+        aliases.add('Role.Update');
+        aliases.add('Role.Delete');
+      }
+      if (
+        requiredPermission === 'Role.Create' ||
+        requiredPermission === 'Role.Update' ||
+        requiredPermission === 'Role.Delete'
+      ) {
+        aliases.add('Roles.Manage');
+        aliases.add('Role.Manage');
+      }
+      if (requiredPermission === 'Roles.Assign' || requiredPermission === 'Role.Assign') {
+        aliases.add('Roles.Assign');
+        aliases.add('Role.Assign');
+        aliases.add('Role.Update');
+        aliases.add('Roles.Manage');
+        aliases.add('Role.Manage');
+      }
+      if (requiredPermission === 'Users.View' || requiredPermission === 'User.View') {
+        aliases.add('Users.View');
+        aliases.add('User.View');
+      }
+      if (requiredPermission === 'Users.Update' || requiredPermission === 'User.Update') {
+        aliases.add('Users.Update');
+        aliases.add('User.Update');
+      }
+      if (
+        requiredPermission === 'Users.Manage' ||
+        requiredPermission === 'User.Manage' ||
+        requiredPermission === 'User.Delete'
+      ) {
+        aliases.add('Users.Manage');
+        aliases.add('User.Manage');
+        aliases.add('User.Delete');
+      }
+
       // Check if user has permission
-      if (!permissions.includes(requiredPermission)) {
+      const hasPerm = Array.from(aliases).some((p) => permissions.includes(p));
+      if (!hasPerm) {
         return next(
           new AppError('Forbidden: You do not have permission to perform this action', 403)
         );
@@ -396,6 +452,24 @@ export const requireSpacePermission = (requiredPermission: string, spaceIdParamN
       if (requiredPermission.includes('Donation.Cancel'))
         permAliases.push('Space.Donation.Cancel', 'Space.Donation.Review');
       if (requiredPermission.includes('Donation.Delete')) permAliases.push('Space.Donation.Delete');
+      if (
+        requiredPermission === 'Space.InviteMember' ||
+        requiredPermission === 'Space.Member.Invite'
+      )
+        permAliases.push('Space.InviteMember', 'Space.Member.Invite');
+      if (
+        requiredPermission === 'Space.UpdateMemberRole' ||
+        requiredPermission === 'Space.Role.Manage' ||
+        requiredPermission === 'Space.Member.Manage'
+      )
+        permAliases.push('Space.UpdateMemberRole', 'Space.Role.Manage', 'Space.Member.Manage');
+      if (
+        requiredPermission === 'Space.RemoveMember' ||
+        requiredPermission === 'Space.Member.Remove'
+      )
+        permAliases.push('Space.RemoveMember', 'Space.Member.Remove');
+      if (requiredPermission === 'Space.ViewMembers')
+        permAliases.push('Space.ViewMembers', 'Space.View');
 
       const hasPerm = permAliases.some((p) => rolePermissions.includes(p));
       if (!hasPerm) {

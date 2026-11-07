@@ -3,31 +3,50 @@ import { DONATION_PERMISSIONS } from '../src/modules/donation/donation.types';
 import { logger } from '../src/utils/logger';
 
 export const SYSTEM_ROLES = [
-  { id: 1, name: 'Monk' },
-  { id: 2, name: 'Donor' },
-  { id: 3, name: 'Admin' },
+  {
+    id: 1,
+    name: 'Admin',
+    description:
+      'Full administrative oversight. Manages system roles, permissions, and all user accounts.',
+  },
+  {
+    id: 2,
+    name: 'Monk',
+    description:
+      'Religious administrators who can create and manage Monastery Spaces, manage donors, and configure donation schedules.',
+  },
+  {
+    id: 3,
+    name: 'User',
+    description:
+      'Donors and devotees who browse monasteries, submit donation requests, and track their personal donations.',
+  },
 ];
 
 export const SPACE_ROLES = [
   {
     id: 1,
-    name: 'Space Admin',
-    description: 'Full control and administration of the monastery space',
+    name: 'Owner',
+    description:
+      'Monk who created the space. Complete control over space details, member roles, and deletion.',
   },
   {
     id: 2,
-    name: 'Space Moderator',
-    description: 'Moderate space activities, members, and review donations',
+    name: 'Admin',
+    description:
+      'Monastery trustee/manager. Manages members, reviews, and schedules donations. Cannot delete the space or remove the owner.',
   },
   {
     id: 3,
-    name: 'Space Editor',
-    description: 'Create posts and initiate donations in space',
+    name: 'Editor',
+    description:
+      'Accountant/clerk. Records manual donations, sets schedules, and completes donations.',
   },
   {
     id: 4,
-    name: 'Space Member',
-    description: 'General monastery space member with view access',
+    name: 'Viewer',
+    description:
+      'Member or donor within the space. Can view donation lists and monastery space details.',
   },
 ];
 
@@ -153,11 +172,11 @@ async function seedRbac() {
     }
   };
 
-  // SuperAdmin (3): All System Permissions
-  await assignSysPermissions(3, SYSTEM_PERMISSIONS);
+  // Admin (Role ID 1): Full administrative oversight (All System Permissions)
+  await assignSysPermissions(1, SYSTEM_PERMISSIONS);
 
-  // Monk (1): System permissions for monastery management
-  await assignSysPermissions(1, [
+  // Monk (Role ID 2): Religious administrator (Monastery Spaces, Donors, Schedules)
+  await assignSysPermissions(2, [
     'User.View',
     'Donor.View',
     'Monastery.View',
@@ -168,8 +187,8 @@ async function seedRbac() {
     ...DONATION_PERMISSIONS,
   ]);
 
-  // Donor (2): Read-only view
-  await assignSysPermissions(2, [
+  // User (Role ID 3): Donors and devotees (View monasteries, donation requests, track donations)
+  await assignSysPermissions(3, [
     'User.View',
     'Donor.View',
     'Monastery.View',
@@ -241,26 +260,27 @@ async function seedRbac() {
     }
   };
 
-  // Space Admin (1): Full space management (all space permissions except Space.Delete, reserved for Owner)
+  // Owner (Space Role ID 1): Monk who created the space (All space permissions)
   await assignSpacePermissions(
     1,
+    SPACE_PERMISSIONS.map((p) => p.name)
+  );
+
+  // Admin (Space Role ID 2): Monastery trustee/manager (All except Space.Delete)
+  await assignSpacePermissions(
+    2,
     SPACE_PERMISSIONS.filter((p) => p.name !== 'Space.Delete').map((p) => p.name)
   );
 
-  // Space Moderator (2)
-  await assignSpacePermissions(2, [
+  // Editor (Space Role ID 3): Accountant/clerk (View, Post, Donation Create/Review)
+  await assignSpacePermissions(3, [
     'Space.View',
-    'Space.Member.Invite',
-    'Space.Member.Manage',
     'Space.Post.Create',
     'Space.Donation.Create',
     'Space.Donation.Review',
   ]);
 
-  // Space Editor (3)
-  await assignSpacePermissions(3, ['Space.View', 'Space.Post.Create', 'Space.Donation.Create']);
-
-  // Space Member (4)
+  // Viewer (Space Role ID 4): Member/donor (View donation lists and monastery space details)
   await assignSpacePermissions(4, ['Space.View']);
 
   logger.info('RBAC seeding complete: 3 System Roles, 4 Space Roles, and permissions assigned.');
@@ -272,29 +292,29 @@ async function userSeeder() {
   logger.info('Seeding default users...');
   const password = await Bun.password.hash('password123');
 
-  // Admin user
+  // Admin user (Role ID 1)
   await prisma.user.upsert({
     where: { phone: '09999999999' },
-    update: { roleId: 3 },
+    update: { roleId: 1 },
     create: {
       phone: '09999999999',
       name: 'SuperAdmin',
       password,
       email: 'admin@hsumchaint.org',
-      roleId: 3,
+      roleId: 1,
     },
   });
 
-  // Default Monk User
+  // Default Monk User (Role ID 2)
   await prisma.user.upsert({
     where: { phone: '09111111111' },
-    update: { roleId: 1 },
+    update: { roleId: 2 },
     create: {
       phone: '09111111111',
       name: 'U Thuzana (Monk)',
       password,
       email: 'monk@hsumchaint.org',
-      roleId: 1,
+      roleId: 2,
       monkProfile: {
         create: {
           monasteryName: 'Mahasi Sasana Yeiktha',
@@ -304,7 +324,7 @@ async function userSeeder() {
     },
   });
 
-  // Test users
+  // Test users (Role ID 2 for Monk, 3 for User)
   for (let i = 0; i < 5; i++) {
     const phone = `0912345678${i}`;
     await prisma.user.upsert({
@@ -315,7 +335,7 @@ async function userSeeder() {
         name: `testUser${i}`,
         password,
         email: `test${i}@gmail.com`,
-        roleId: i % 2 === 0 ? 1 : 2,
+        roleId: i % 2 === 0 ? 2 : 3,
       },
     });
   }
