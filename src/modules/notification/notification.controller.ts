@@ -1,10 +1,10 @@
 import type { NextFunction, Request, Response } from 'express';
-import { successResponse } from '@/utils/response';
+import { sendPaginatedResponse, sendSuccessResponse } from '@/utils/response';
 import type {
   CreateNotificationInput,
+  DeleteNotificationInput,
   GetNotificationsQueryInput,
   MarkNotificationAsReadInput,
-  NotificationIdParamInput,
 } from './notification.schema';
 import {
   createNotificationService,
@@ -26,7 +26,7 @@ export const createNotification = async (req: Request, res: Response, next: Next
       title: body.title,
     });
 
-    return successResponse(res, result, 'Notification created successfully', 201);
+    return sendSuccessResponse(res, result, 'Notification created successfully.', 201);
   } catch (err) {
     next(err);
   }
@@ -37,9 +37,24 @@ export const getUserNotifications = async (req: Request, res: Response, next: Ne
     const userId = req.user.userId;
     const query = req.query as unknown as GetNotificationsQueryInput;
 
-    const result = await getUserNotificationsService(req, userId, query);
+    const result = await getUserNotificationsService(userId, query);
 
-    return successResponse(res, result, 'Notifications retrieved successfully');
+    const totalPages = Math.ceil(result.totals / result.pageSize) || 1;
+    const pagination = {
+      pageNumber: result.pageNumber,
+      pageSize: result.pageSize,
+      totalCount: result.totals,
+      totalPages,
+      hasPreviousPage: result.pageNumber > 1,
+      hasNextPage: result.pageNumber < totalPages,
+    };
+
+    const data = {
+      unreadCount: result.unreadCount,
+      items: result.notifications,
+    };
+
+    return sendPaginatedResponse(res, data, pagination, 'Notifications retrieved successfully.');
   } catch (err) {
     next(err);
   }
@@ -47,13 +62,12 @@ export const getUserNotifications = async (req: Request, res: Response, next: Ne
 
 export const markNotificationAsRead = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const userId = req.user.userId;
-    const { id } = req.params as unknown as NotificationIdParamInput;
     const body = req.body as MarkNotificationAsReadInput;
+    const targetUserId = body.userId ?? req.user.userId;
 
-    const result = await markNotificationAsReadService(id, userId, body?.isRead ?? true);
+    const result = await markNotificationAsReadService(body.notificationId, targetUserId);
 
-    return successResponse(res, result, 'Notification marked as read');
+    return sendSuccessResponse(res, result, 'Notification marked as read.');
   } catch (err) {
     next(err);
   }
@@ -61,12 +75,13 @@ export const markNotificationAsRead = async (req: Request, res: Response, next: 
 
 export const deleteNotification = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const userId = req.user.userId;
-    const { id } = req.params as unknown as NotificationIdParamInput;
+    const body = req.body as DeleteNotificationInput;
+    const notificationId = Number(body?.notificationId ?? req.params?.id);
+    const targetUserId = body?.userId ?? req.user.userId;
 
-    const result = await deleteNotificationService(id, userId);
+    const result = await deleteNotificationService(notificationId, targetUserId);
 
-    return successResponse(res, result, 'Notification deleted successfully');
+    return sendSuccessResponse(res, result, 'Notification deleted successfully.');
   } catch (err) {
     next(err);
   }
