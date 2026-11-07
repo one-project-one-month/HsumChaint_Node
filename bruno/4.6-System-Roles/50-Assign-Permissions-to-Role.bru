@@ -1,0 +1,22 @@
+meta {
+  name: 50. Assign Permissions to Role
+  type: http
+  seq: 7
+}
+
+post {
+  url: {{baseUrl}}/api/v1/roles/assign-permissions
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:json {
+  {
+    "roleId": 4,
+    "permissionIds": [1, 4, 11, 17]
+  }
+}

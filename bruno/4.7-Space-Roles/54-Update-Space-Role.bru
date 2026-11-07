@@ -1,0 +1,23 @@
+meta {
+  name: 54. Update Space Role
+  type: http
+  seq: 4
+}
+
+put {
+  url: {{baseUrl}}/api/v1/space-roles/5
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:json {
+  {
+    "name": "Senior Treasurer",
+    "description": "Lead accountant with full financial access",
+    "permissionIds": [1, 2, 8, 9, 10, 11]
+  }
+}

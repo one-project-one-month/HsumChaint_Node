@@ -1,0 +1,20 @@
+meta {
+  name: 51. Get Space Roles
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/api/v1/space-roles?pageNumber=1&pageSize=10
+  body: none
+  auth: bearer
+}
+
+params:query {
+  pageNumber: 1
+  pageSize: 10
+}
+
+auth:bearer {
+  token: {{token}}
+}
