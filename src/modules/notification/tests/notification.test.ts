@@ -87,8 +87,9 @@ describe('Notification Module Endpoints', () => {
         });
 
       expect(response.status).toBe(201);
-      expect(response.body.success).toBe(true);
-      expect(response.body.message).toBe('Notification created successfully');
+      expect(response.body.isSuccess).toBe(true);
+      expect(response.body.isFailure).toBe(false);
+      expect(response.body.message).toBe('Notification created successfully.');
       expect(response.body.data.id).toBe(FAKE_NOTIFICATION.id);
       expect(notificationCreateMock).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -122,6 +123,8 @@ describe('Notification Module Endpoints', () => {
         });
 
       expect(response.status).toBe(201);
+      expect(response.body.isSuccess).toBe(true);
+      expect(response.body.isFailure).toBe(false);
       expect(notificationCreateMock).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({
@@ -155,7 +158,7 @@ describe('Notification Module Endpoints', () => {
   });
 
   describe('GET /api/v1/notifications', () => {
-    it('should retrieve notifications list with pagination and unreadCount', async () => {
+    it('should retrieve notifications list with pagination and unreadCount in new format', async () => {
       notificationFindManyMock.mockResolvedValue([FAKE_NOTIFICATION] as unknown as Notification[]);
       notificationCountMock.mockResolvedValue(1);
 
@@ -164,9 +167,19 @@ describe('Notification Module Endpoints', () => {
         .set('Authorization', accessToken);
 
       expect(response.status).toBe(200);
-      expect(response.body.success).toBe(true);
-      expect(response.body.data.notifications).toHaveLength(1);
-      expect(response.body.data.paginationData).toBeDefined();
+      expect(response.body.isSuccess).toBe(true);
+      expect(response.body.isFailure).toBe(false);
+      expect(response.body.message).toBe('Notifications retrieved successfully.');
+      expect(response.body.data.items).toHaveLength(1);
+      expect(response.body.data.unreadCount).toBe(1);
+      expect(response.body.pagination).toMatchObject({
+        pageNumber: 1,
+        pageSize: 10,
+        totalCount: 1,
+        totalPages: 1,
+        hasPreviousPage: false,
+        hasNextPage: false,
+      });
     });
 
     it('should return 401 when unauthenticated', async () => {
@@ -175,8 +188,8 @@ describe('Notification Module Endpoints', () => {
     });
   });
 
-  describe('PUT /api/v1/notifications/:id', () => {
-    it('should mark notification as read for its owner', async () => {
+  describe('PATCH /api/v1/notifications/read-noti', () => {
+    it('should mark notification as read with body { notificationId, userId }', async () => {
       notificationFindFirstMock.mockResolvedValue(FAKE_NOTIFICATION as unknown as Notification);
       notificationUpdateMock.mockResolvedValue({
         ...FAKE_NOTIFICATION,
@@ -184,40 +197,89 @@ describe('Notification Module Endpoints', () => {
       } as unknown as Notification);
 
       const response = await request(app)
-        .put(`/api/v1/notifications/${FAKE_NOTIFICATION.id}`)
-        .set('Authorization', accessToken);
+        .patch('/api/v1/notifications/read-noti')
+        .set('Authorization', accessToken)
+        .send({
+          notificationId: FAKE_NOTIFICATION.id,
+          userId: FAKE_USER_ID,
+        });
 
       expect(response.status).toBe(200);
-      expect(response.body.success).toBe(true);
-      expect(response.body.message).toBe('Notification marked as read');
+      expect(response.body.isSuccess).toBe(true);
+      expect(response.body.isFailure).toBe(false);
+      expect(response.body.message).toBe('Notification marked as read.');
       expect(notificationUpdateMock).toHaveBeenCalledWith({
         where: { id: FAKE_NOTIFICATION.id },
         data: { isRead: true },
       });
     });
 
+    it('should mark notification as read with only notificationId in body', async () => {
+      notificationFindFirstMock.mockResolvedValue(FAKE_NOTIFICATION as unknown as Notification);
+      notificationUpdateMock.mockResolvedValue({
+        ...FAKE_NOTIFICATION,
+        isRead: true,
+      } as unknown as Notification);
+
+      const response = await request(app)
+        .patch('/api/v1/notifications/read-noti')
+        .set('Authorization', accessToken)
+        .send({ notificationId: FAKE_NOTIFICATION.id });
+
+      expect(response.status).toBe(200);
+      expect(response.body.isSuccess).toBe(true);
+      expect(response.body.message).toBe('Notification marked as read.');
+    });
+
     it('should return 404 when notification does not exist or belongs to another user', async () => {
       notificationFindFirstMock.mockResolvedValue(null);
 
       const response = await request(app)
-        .put('/api/v1/notifications/999')
-        .set('Authorization', accessToken);
+        .patch('/api/v1/notifications/read-noti')
+        .set('Authorization', accessToken)
+        .send({ notificationId: 999, userId: FAKE_USER_ID });
 
       expect(response.status).toBe(404);
       expect(response.body.message).toBe('Notification not found');
     });
 
-    it('should return 400 for non-numeric ID param', async () => {
+    it('should return 400 when notificationId is missing or invalid', async () => {
       const response = await request(app)
-        .put('/api/v1/notifications/invalid-id')
-        .set('Authorization', accessToken);
+        .patch('/api/v1/notifications/read-noti')
+        .set('Authorization', accessToken)
+        .send({ notificationId: 'invalid' });
 
       expect(response.status).toBe(400);
     });
   });
 
-  describe('DELETE /api/v1/notifications/:id', () => {
-    it('should soft delete notification by setting isDeleted to true', async () => {
+  describe('DELETE /api/v1/notifications/delete', () => {
+    it('should soft delete notification with body { notificationId, userId }', async () => {
+      notificationFindFirstMock.mockResolvedValue(FAKE_NOTIFICATION as unknown as Notification);
+      notificationUpdateMock.mockResolvedValue({
+        ...FAKE_NOTIFICATION,
+        isDeleted: true,
+      } as unknown as Notification);
+
+      const response = await request(app)
+        .delete('/api/v1/notifications/delete')
+        .set('Authorization', accessToken)
+        .send({
+          notificationId: 12,
+          userId: 3,
+        });
+
+      expect(response.status).toBe(200);
+      expect(response.body.isSuccess).toBe(true);
+      expect(response.body.isFailure).toBe(false);
+      expect(response.body.message).toBe('Notification deleted successfully.');
+      expect(notificationUpdateMock).toHaveBeenCalledWith({
+        where: { id: 12 },
+        data: { isDeleted: true },
+      });
+    });
+
+    it('should soft delete notification via route param DELETE /:id', async () => {
       notificationFindFirstMock.mockResolvedValue(FAKE_NOTIFICATION as unknown as Notification);
       notificationUpdateMock.mockResolvedValue({
         ...FAKE_NOTIFICATION,
@@ -229,29 +291,27 @@ describe('Notification Module Endpoints', () => {
         .set('Authorization', accessToken);
 
       expect(response.status).toBe(200);
-      expect(response.body.success).toBe(true);
-      expect(response.body.message).toBe('Notification deleted successfully');
-      expect(notificationUpdateMock).toHaveBeenCalledWith({
-        where: { id: FAKE_NOTIFICATION.id },
-        data: { isDeleted: true },
-      });
+      expect(response.body.isSuccess).toBe(true);
+      expect(response.body.message).toBe('Notification deleted successfully.');
     });
 
     it('should return 404 when notification to delete does not exist', async () => {
       notificationFindFirstMock.mockResolvedValue(null);
 
       const response = await request(app)
-        .delete('/api/v1/notifications/999')
-        .set('Authorization', accessToken);
+        .delete('/api/v1/notifications/delete')
+        .set('Authorization', accessToken)
+        .send({ notificationId: 999, userId: FAKE_USER_ID });
 
       expect(response.status).toBe(404);
       expect(response.body.message).toBe('Notification not found');
     });
 
-    it('should return 400 for non-numeric ID param on delete', async () => {
+    it('should return 400 when notificationId is missing on delete', async () => {
       const response = await request(app)
-        .delete('/api/v1/notifications/abc')
-        .set('Authorization', accessToken);
+        .delete('/api/v1/notifications/delete')
+        .set('Authorization', accessToken)
+        .send({});
 
       expect(response.status).toBe(400);
     });

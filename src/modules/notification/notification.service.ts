@@ -1,6 +1,4 @@
-import type { Request } from 'express';
 import type { Prisma } from 'prisma-client';
-import { generatePaginationData } from '@/helper/paginationHelper';
 import { sendPush } from '@/lib/firebase';
 import { prisma } from '@/lib/prisma';
 import { AppError } from '@/utils/AppError';
@@ -57,7 +55,6 @@ export const createNotificationService = async (data: {
 };
 
 export const getUserNotificationsService = async (
-  req: Request,
   userId: number,
   query: GetNotificationsQueryInput
 ) => {
@@ -95,19 +92,18 @@ export const getUserNotificationsService = async (
     }),
   ]);
 
-  const paginationData = generatePaginationData(req, totals, page, limit);
-
   return {
     notifications,
     unreadCount,
     totals,
-    paginationData,
+    pageNumber: page,
+    pageSize: limit,
   };
 };
 
-export const markNotificationAsReadService = async (id: number, userId: number, isRead = true) => {
+export const markNotificationAsReadService = async (notificationId: number, userId: number) => {
   const existing = await prisma.notification.findFirst({
-    where: { id, userId, isDeleted: false },
+    where: { id: notificationId, userId, isDeleted: false },
   });
 
   if (!existing) {
@@ -115,16 +111,16 @@ export const markNotificationAsReadService = async (id: number, userId: number, 
   }
 
   const updated = await prisma.notification.update({
-    where: { id },
-    data: { isRead },
+    where: { id: notificationId },
+    data: { isRead: true },
   });
 
   return updated;
 };
 
-export const deleteNotificationService = async (id: number, userId: number) => {
+export const deleteNotificationService = async (notificationId: number, userId: number) => {
   const existing = await prisma.notification.findFirst({
-    where: { id, userId, isDeleted: false },
+    where: { id: notificationId, userId, isDeleted: false },
   });
 
   if (!existing) {
@@ -132,9 +128,9 @@ export const deleteNotificationService = async (id: number, userId: number) => {
   }
 
   await prisma.notification.update({
-    where: { id },
+    where: { id: notificationId },
     data: { isDeleted: true },
   });
 
-  return { id: existing.id };
+  return { id: existing.id, notificationId: existing.id };
 };
