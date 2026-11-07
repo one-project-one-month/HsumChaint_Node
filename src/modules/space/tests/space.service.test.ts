@@ -159,20 +159,26 @@ mock.module('@/lib/prisma', () => ({
       }),
       findMany: mock(
         async (args?: {
-          where?: any;
+          where?: {
+            id?: { gt?: number };
+            OR?: Array<{
+              monasteryName?: { contains?: string };
+              address?: { contains?: string };
+            }>;
+          };
           skip?: number;
           take?: number;
-          include?: any;
-          orderBy?: any;
+          include?: unknown;
+          orderBy?: unknown;
         }) => {
           let list = mockSpaces.filter((s) => !s.isDeleted);
           if (args?.where) {
             if (args.where.id?.gt !== undefined) {
-              list = list.filter((s) => s.id > args.where.id.gt);
+              list = list.filter((s) => s.id > (args.where?.id?.gt ?? 0));
             }
             if (args.where.OR && Array.isArray(args.where.OR)) {
               list = list.filter((s) =>
-                args.where.OR.some((cond: any) => {
+                args.where?.OR?.some((cond) => {
                   if (cond.monasteryName?.contains) {
                     return s.monasteryName
                       .toLowerCase()
@@ -238,32 +244,41 @@ mock.module('@/lib/prisma', () => ({
         if (index === -1) throw new Error('Not found');
         return mockSpaces.splice(index, 1)[0];
       }),
-      count: mock(async (args?: { where?: any }) => {
-        let list = mockSpaces.filter((s) => !s.isDeleted);
-        if (args?.where?.OR && Array.isArray(args.where.OR)) {
-          list = list.filter((s) =>
-            args.where.OR.some((cond: any) => {
-              if (cond.monasteryName?.contains) {
-                return s.monasteryName
-                  .toLowerCase()
-                  .includes(cond.monasteryName.contains.toLowerCase());
-              }
-              if (cond.address?.contains) {
-                return (s.address ?? '')
-                  .toLowerCase()
-                  .includes(cond.address.contains.toLowerCase());
-              }
-              if (cond.description?.contains) {
-                return (s.description ?? '')
-                  .toLowerCase()
-                  .includes(cond.description.contains.toLowerCase());
-              }
-              return false;
-            })
-          );
+      count: mock(
+        async (args?: {
+          where?: {
+            OR?: Array<{
+              monasteryName?: { contains?: string };
+              address?: { contains?: string };
+            }>;
+          };
+        }) => {
+          let list = mockSpaces.filter((s) => !s.isDeleted);
+          if (args?.where?.OR && Array.isArray(args.where.OR)) {
+            list = list.filter((s) =>
+              args.where?.OR?.some((cond) => {
+                if (cond.monasteryName?.contains) {
+                  return s.monasteryName
+                    .toLowerCase()
+                    .includes(cond.monasteryName.contains.toLowerCase());
+                }
+                if (cond.address?.contains) {
+                  return (s.address ?? '')
+                    .toLowerCase()
+                    .includes(cond.address.contains.toLowerCase());
+                }
+                if (cond.description?.contains) {
+                  return (s.description ?? '')
+                    .toLowerCase()
+                    .includes(cond.description.contains.toLowerCase());
+                }
+                return false;
+              })
+            );
+          }
+          return list.length;
         }
-        return list.length;
-      }),
+      ),
     },
     monasteryMember: {
       create: mock(
@@ -333,8 +348,8 @@ mock.module('@/lib/prisma', () => ({
           };
           take?: number;
           skip?: number;
-          include?: any;
-          orderBy?: any;
+          include?: unknown;
+          orderBy?: unknown;
         }) => {
           const { where } = args;
           let list = mockMembers.filter((m) => {

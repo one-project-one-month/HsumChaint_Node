@@ -123,7 +123,7 @@ describe('getUserByIdService Unit Test (Mocking)', () => {
   it('should throw error for non-existent ID', async () => {
     findFirstMock.mockResolvedValue(null); // fake: DB found nothing
 
-    await expect(getUserByIdService({ id: 99999 })).rejects.toThrow('User is not found');
+    await expect(getUserByIdService({ id: 99999 })).rejects.toThrow('User not found');
   });
   // Soft-delete behavior: instead of actually updating a DB row like the
   // integration test did, we simply mock findUnique to return null —
@@ -132,6 +132,6 @@ describe('getUserByIdService Unit Test (Mocking)', () => {
   it('should return null if the user is soft-deleted (isDeleted: true)', async () => {
     findFirstMock.mockResolvedValue(null); // fake: service filters out deleted users
 
-    await expect(getUserByIdService({ id: mockDonor.id })).rejects.toThrow('User is not found');
+    await expect(getUserByIdService({ id: mockDonor.id })).rejects.toThrow('User not found');
   });
 });

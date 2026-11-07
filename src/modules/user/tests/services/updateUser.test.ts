@@ -184,7 +184,7 @@ describe('updateUserService Unit Test (Mocking)', () => {
   it('should throw an error when trying to update with invalid user ID', async () => {
     findUniqueMock.mockResolvedValue(null);
 
-    await expect(updateUserService(999, { name: 'ghost' })).rejects.toThrow('User is not found');
+    await expect(updateUserService(999, { name: 'ghost' })).rejects.toThrow('User not found');
 
     expect(updateMock).not.toHaveBeenCalled();
   });
