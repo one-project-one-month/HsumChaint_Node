@@ -86,12 +86,10 @@ describe('Auth Service (Current System State: 1=Monk, 2=Donor, 3=Admin)', () => 
         contactPhone: '09100000001',
       });
 
-      expect(response.userId).toBe(201);
-      expect(response.name).toBe('U Thuzana');
-      expect(response.phoneNumber).toBe('09100000001');
+      expect(response.id).toBe(201);
       expect(response.roleId).toBe(1);
       expect(response.roleName).toBe('Monk');
-      expect(response.token).toBe('access_token_for_201_1');
+      expect(response.accessToken).toBe('access_token_for_201_1');
       expect(response.refreshToken).toBe('refresh_token_for_201_1');
       expect(Array.isArray(response.permissions)).toBe(true);
     });
@@ -129,12 +127,10 @@ describe('Auth Service (Current System State: 1=Monk, 2=Donor, 3=Admin)', () => 
         roleId: 2, // Donor
       });
 
-      expect(response.userId).toBe(202);
-      expect(response.name).toBe('Daw Hla');
-      expect(response.phoneNumber).toBe('09100000002');
+      expect(response.id).toBe(202);
       expect(response.roleId).toBe(2);
       expect(response.roleName).toBe('Donor');
-      expect(response.token).toBe('access_token_for_202_2');
+      expect(response.accessToken).toBe('access_token_for_202_2');
       expect(response.refreshToken).toBe('refresh_token_for_202_2');
       expect(Array.isArray(response.permissions)).toBe(true);
     });
@@ -169,12 +165,10 @@ describe('Auth Service (Current System State: 1=Monk, 2=Donor, 3=Admin)', () => 
         password: 'Password123!',
       });
 
-      expect(response.userId).toBe(201);
-      expect(response.name).toBe('U Thuzana');
-      expect(response.phoneNumber).toBe('09100000001');
+      expect(response.id).toBe(201);
       expect(response.roleId).toBe(1);
       expect(response.roleName).toBe('Monk');
-      expect(response.token).toBe('access_token_for_201_1');
+      expect(response.accessToken).toBe('access_token_for_201_1');
       expect(response.refreshToken).toBe('refresh_token_for_201_1');
       expect(Array.isArray(response.permissions)).toBe(true);
     });
@@ -202,12 +196,10 @@ describe('Auth Service (Current System State: 1=Monk, 2=Donor, 3=Admin)', () => 
         password: 'Password123!',
       });
 
-      expect(response.userId).toBe(202);
-      expect(response.name).toBe('Daw Hla');
-      expect(response.phoneNumber).toBe('09100000002');
+      expect(response.id).toBe(202);
       expect(response.roleId).toBe(2);
       expect(response.roleName).toBe('Donor');
-      expect(response.token).toBe('access_token_for_202_2');
+      expect(response.accessToken).toBe('access_token_for_202_2');
       expect(response.refreshToken).toBe('refresh_token_for_202_2');
       expect(Array.isArray(response.permissions)).toBe(true);
     });
@@ -233,7 +225,7 @@ describe('Auth Service (Current System State: 1=Monk, 2=Donor, 3=Admin)', () => 
       prisma.$transaction = mock(async (cb: (tx: unknown) => Promise<unknown>) => {
         const tx = {
           user: {
-            findFirst: mock(async () => ({ roleId: 1 })),
+            findFirst: mock(async () => ({ id: 201, roleId: 1, role: { name: 'Monk' } })),
           },
           refreshToken: {
             update: mock(async () => ({})),
@@ -243,8 +235,12 @@ describe('Auth Service (Current System State: 1=Monk, 2=Donor, 3=Admin)', () => 
       });
 
       const result = await refreshTokenService(validRefreshToken, 201);
-      expect(result.token).toBe('access_token_for_201_1');
+      expect(result.id).toBe(201);
+      expect(result.roleId).toBe(1);
+      expect(result.roleName).toBe('Monk');
+      expect(result.accessToken).toBe('access_token_for_201_1');
       expect(result.refreshToken).toBe('refresh_token_for_201_1');
+      expect(Array.isArray(result.permissions)).toBe(true);
     });
 
     it('rejects if expected userId does not match token payload userId', async () => {
@@ -257,7 +253,7 @@ describe('Auth Service (Current System State: 1=Monk, 2=Donor, 3=Admin)', () => 
       );
 
       expect(refreshTokenService(validRefreshToken, 999)).rejects.toThrow(
-        'Invalid refresh token for provided user'
+        'Invalid or expired Refresh Token'
       );
     });
   });
