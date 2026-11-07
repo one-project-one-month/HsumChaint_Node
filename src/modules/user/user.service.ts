@@ -165,7 +165,7 @@ const getUserWithProfile = async (id: number) => {
     select: { ...selectUser, monkProfile: true },
   });
 
-  if (!user) throw new AppError('User is not found', 404);
+  if (!user) throw new AppError('User not found', 404);
 
   const mapped = mapUserDto(user);
 
@@ -191,7 +191,7 @@ export const updateUserService = async (
 ) => {
   const user = await prisma.user.findUnique({ where: { id } });
 
-  if (!user || user.isDeleted) throw new AppError('User is not found', 404);
+  if (!user || user.isDeleted) throw new AppError('User not found', 404);
 
   // Business rule: only SuperAdmin (Role ID 3) can change roleId
   if (data.roleId !== undefined && data.roleId !== user.roleId && callerRoleId !== 3) {
@@ -286,7 +286,7 @@ export const getMonkProfileService = async (userId: number) => {
     include: { monkProfile: true },
   });
 
-  if (!user) throw new AppError('User is not found', 404);
+  if (!user) throw new AppError('User not found', 404);
   if (user.roleId !== 1 || !user.monkProfile) {
     throw new AppError('User is not a monk or monk profile does not exist', 400);
   }
@@ -307,7 +307,7 @@ export const updateMonkProfileService = async (
     where: { id: userId, isDeleted: false },
   });
 
-  if (!user) throw new AppError('User is not found', 404);
+  if (!user) throw new AppError('User not found', 404);
   if (user.roleId !== 1) {
     throw new AppError('Only monk users can update monk profile', 400);
   }
@@ -339,7 +339,7 @@ export const deleteMonkProfileService = async (userId: number) => {
   const user = await prisma.user.findFirst({
     where: { id: userId, isDeleted: false },
   });
-  if (!user) throw new AppError('User is not found', 404);
+  if (!user) throw new AppError('User not found', 404);
 
   const profile = await prisma.monkProfile.findUnique({
     where: { userId },
@@ -651,7 +651,7 @@ export const getUserSettingsService = async (userId: number) => {
   const user = await prisma.user.findFirst({
     where: { id: userId, isDeleted: false },
   });
-  if (!user) throw new AppError('User is not found', 404);
+  if (!user) throw new AppError('User not found', 404);
 
   const row = await prisma.userSetting.findUnique({
     where: { userId },
@@ -673,7 +673,7 @@ export const updateUserSettingsService = async (
   const user = await prisma.user.findFirst({
     where: { id: userId, isDeleted: false },
   });
-  if (!user) throw new AppError('User is not found', 404);
+  if (!user) throw new AppError('User not found', 404);
 
   const parseDate = (d?: string | null) => {
     if (d === undefined) return undefined;
