@@ -95,7 +95,7 @@ export function donationFixture(withDonation = true) {
       amount: null,
       quantity: null,
       status: 'PendingReview',
-      statusValue: 2,
+      statusValue: 0,
       reviewerId: null,
       createdAt: new Date('2026-10-01T00:00:00Z'),
       reviewedAt: null,
