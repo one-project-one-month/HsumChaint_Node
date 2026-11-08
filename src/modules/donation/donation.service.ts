@@ -7,6 +7,7 @@ import { AppError } from '@/utils/AppError';
 import { logger } from '@/utils/logger';
 import type {
   BatchDonationInput,
+  DonationFeedQueryInput,
   DonationInput,
   DonationQueryInput,
   ManualDonationInput,
@@ -15,8 +16,10 @@ import type {
   RecurringInput,
   ReviewDonationInput,
   ScheduleDonationInput,
+  UpdateDonationStatusInput,
 } from './donation.schema';
 import {
+  type CursorPaginatedDonationsDto,
   DONATION_NOTIFICATION_TYPE,
   DONATION_STATUS,
   DONATION_TYPE,
@@ -67,6 +70,23 @@ export type ChangeInput = {
 // Data Mapping & Helpers
 // ============================================================================
 
+export function resolveDonationStatus(row: { status?: unknown; statusValue?: unknown }): number {
+  if (typeof row.statusValue === 'number') {
+    if (row.statusValue === 6) return DONATION_STATUS.Rejected;
+    if (row.statusValue === 7) return DONATION_STATUS.Cancelled;
+    if (row.statusValue >= 0 && row.statusValue <= 5) return row.statusValue;
+  }
+  if (typeof row.status === 'number') {
+    if (row.status === 6) return DONATION_STATUS.Rejected;
+    if (row.status === 7) return DONATION_STATUS.Cancelled;
+    if (row.status >= 0 && row.status <= 5) return row.status;
+  }
+  if (typeof row.status === 'string' && row.status in DONATION_STATUS) {
+    return DONATION_STATUS[row.status as keyof typeof DONATION_STATUS];
+  }
+  return DONATION_STATUS.PendingReview;
+}
+
 export function mapDonation(row: DonorList): DonationDto {
   const donationType =
     typeof row.donationTypeValue === 'number'
@@ -77,12 +97,7 @@ export function mapDonation(row: DonorList): DonationDto {
           DONATION_TYPE[row.donationType as keyof typeof DONATION_TYPE] ??
           DONATION_TYPE.Other);
 
-  const status =
-    typeof row.status === 'number'
-      ? row.status
-      : ((row as unknown as { statusValue?: number }).statusValue ??
-        DONATION_STATUS[row.status as keyof typeof DONATION_STATUS] ??
-        DONATION_STATUS.Draft);
+  const status = resolveDonationStatus(row);
 
   return {
     id: row.id,
@@ -747,6 +762,49 @@ export async function getDonationsService(
   };
 }
 
+export async function getDonationsFeedService(
+  userId: number,
+  query: DonationFeedQueryInput,
+  db: Database = defaultPrisma
+): Promise<CursorPaginatedDonationsDto> {
+  const scope = await getVisibleScope(db, userId, query.monasterySpaceId, query.donorId);
+  const pageSize = Number(query.pageSize) || 15;
+  const lastId = query.lastId !== undefined ? Number(query.lastId) : undefined;
+
+  const where = {
+    ...scope,
+    ...(lastId !== undefined ? { id: { gt: lastId } } : {}),
+    ...(query.status !== undefined ? { statusValue: Number(query.status) } : {}),
+    ...(query.fromDate || query.toDate
+      ? {
+          createdAt: {
+            ...(query.fromDate ? { gte: new Date(query.fromDate) } : {}),
+            ...(query.toDate ? { lte: new Date(query.toDate) } : {}),
+          },
+        }
+      : {}),
+  };
+
+  const rows = await db.donorList.findMany({
+    where,
+    orderBy: { id: 'asc' },
+    take: pageSize + 1,
+  });
+
+  const hasNextPage = rows.length > pageSize;
+  const items = hasNextPage ? rows.slice(0, pageSize) : rows;
+  const nextCursor = items.length > 0 ? items[items.length - 1].id : null;
+
+  return {
+    items: items.map(mapDonation),
+    pagination: {
+      nextCursor,
+      hasNextPage,
+      pageSize,
+    },
+  };
+}
+
 export async function getDonationByIdService(
   userId: number,
   donationId: number,
@@ -867,17 +925,24 @@ export async function changeDonationService(
       );
     }
 
-    const current =
-      typeof row.status === 'number'
-        ? row.status
-        : ((row as unknown as { statusValue?: number }).statusValue ??
-          DONATION_STATUS[row.status as keyof typeof DONATION_STATUS]);
+    const current = resolveDonationStatus(row);
+
+    if (action === 'cancel' && current === DONATION_STATUS.Completed) {
+      throw new AppError('Cannot cancel a completed donation.', 400);
+    }
+    if (action === 'delete' && current === DONATION_STATUS.Completed) {
+      throw new AppError('Completed donations cannot be deleted.', 400);
+    }
 
     if (
-      (action === 'review' && [5, 7].includes(current)) ||
-      (action === 'schedule' && [5, 6, 7].includes(current)) ||
-      (action === 'complete' && [6, 7].includes(current)) ||
-      ((action === 'cancel' || action === 'delete') && current === 5)
+      (action === 'review' &&
+        (current === DONATION_STATUS.Completed || current === DONATION_STATUS.Cancelled)) ||
+      (action === 'schedule' &&
+        (current === DONATION_STATUS.Completed ||
+          current === DONATION_STATUS.Rejected ||
+          current === DONATION_STATUS.Cancelled)) ||
+      (action === 'complete' &&
+        (current === DONATION_STATUS.Rejected || current === DONATION_STATUS.Cancelled))
     ) {
       throw new AppError('Donation status does not allow this action', 409);
     }
@@ -885,7 +950,7 @@ export async function changeDonationService(
     const guard = {
       id: row.id,
       monasterySpaceId: row.monasterySpaceId,
-      statusValue: current,
+      statusValue: row.statusValue,
       reviewedAt: row.reviewedAt,
       completedAt: row.completedAt,
       pickupTime: row.pickupTime,
@@ -905,14 +970,20 @@ export async function changeDonationService(
     let message: string;
 
     if (action === 'review') {
-      if (input.status !== DONATION_STATUS.Accepted && input.status !== DONATION_STATUS.Rejected) {
-        throw new AppError('Review status must be Accepted (3) or Rejected (6)', 400);
+      let reviewStatus = input.status;
+      if (reviewStatus === 3) reviewStatus = DONATION_STATUS.Accepted;
+      if (reviewStatus === 6) reviewStatus = DONATION_STATUS.Rejected;
+      if (reviewStatus !== DONATION_STATUS.Accepted && reviewStatus !== DONATION_STATUS.Rejected) {
+        throw new AppError('Review status must be Accepted (1) or Rejected (4)', 400);
       }
-      nextStatus = input.status;
+      nextStatus = reviewStatus;
       update.reviewerId = userId;
       update.reviewedAt = now;
       if (input.note?.trim()) update.note = input.note;
-      message = nextStatus === 3 ? 'Your donation was accepted.' : 'Your donation was rejected.';
+      message =
+        nextStatus === DONATION_STATUS.Accepted
+          ? 'Your donation was accepted.'
+          : 'Your donation was rejected.';
     } else if (action === 'schedule') {
       if (!input.pickupTime && !input.dropoffTime) {
         throw new AppError('Pickup time or dropoff time is required', 400);
@@ -1052,20 +1123,19 @@ export async function reviewDonationSeriesService(
     const first = rows[0];
     await checkSpacePermission(tx, userId, first.monasterySpaceId, 'Donation.Review');
 
-    if (input.status !== DONATION_STATUS.Accepted && input.status !== DONATION_STATUS.Rejected) {
-      throw new AppError('Review status must be Accepted (3) or Rejected (6)', 400);
+    let reviewStatus = input.status;
+    if (reviewStatus === 3) reviewStatus = DONATION_STATUS.Accepted;
+    if (reviewStatus === 6) reviewStatus = DONATION_STATUS.Rejected;
+    if (reviewStatus !== DONATION_STATUS.Accepted && reviewStatus !== DONATION_STATUS.Rejected) {
+      throw new AppError('Review status must be Accepted (1) or Rejected (4)', 400);
     }
 
-    const nextStatus = input.status;
+    const nextStatus = reviewStatus;
     const now = new Date();
     const results: DonorList[] = [];
 
     for (const row of rows) {
-      const current =
-        typeof row.status === 'number'
-          ? row.status
-          : ((row as unknown as { statusValue?: number }).statusValue ??
-            DONATION_STATUS[row.status as keyof typeof DONATION_STATUS]);
+      const current = resolveDonationStatus(row);
 
       if (current !== DONATION_STATUS.PendingReview) continue;
 
@@ -1091,7 +1161,9 @@ export async function reviewDonationSeriesService(
     }
 
     const message =
-      nextStatus === 3 ? 'Your donation was accepted.' : 'Your donation was rejected.';
+      nextStatus === DONATION_STATUS.Accepted
+        ? 'Your donation was accepted.'
+        : 'Your donation was rejected.';
     await notifyUser(tx, pushes, first.donorId, message, first.id);
     return results.map(mapDonation);
   });
@@ -1124,11 +1196,7 @@ export async function cancelDonationSeriesService(
 
     const results: DonorList[] = [];
     for (const row of rows) {
-      const current =
-        typeof row.status === 'number'
-          ? row.status
-          : ((row as unknown as { statusValue?: number }).statusValue ??
-            DONATION_STATUS[row.status as keyof typeof DONATION_STATUS]);
+      const current = resolveDonationStatus(row);
 
       if (current === DONATION_STATUS.Completed) continue;
 
@@ -1157,6 +1225,59 @@ export async function cancelDonationSeriesService(
   });
 }
 
+export async function updateDonationStatusService(
+  userId: number,
+  donationId: number,
+  input: UpdateDonationStatusInput,
+  spaceId?: number,
+  db: Database = defaultPrisma,
+  delivery: Delivery = {}
+): Promise<{ id: number; monasterySpaceId: number; status: number; note: string | null }> {
+  return executeWithPushes(db, delivery, async (tx, pushes) => {
+    await checkActorUser(tx, userId);
+    const row = await tx.donorList.findFirst({
+      where: {
+        id: donationId,
+        ...(spaceId !== undefined ? { monasterySpaceId: spaceId } : {}),
+        monasterySpace: { isDeleted: false },
+      },
+    });
+    if (!row) throw new AppError('Donation not found', 404);
+
+    await checkSpacePermission(tx, userId, row.monasterySpaceId, 'Donation.Review');
+
+    const nextStatus = input.status;
+    const now = new Date();
+    const update: Prisma.DonorListUncheckedUpdateManyInput = {
+      status: statusName(nextStatus),
+      statusValue: nextStatus,
+      reviewerId: userId,
+      reviewedAt: now,
+    };
+    if (input.note !== undefined) {
+      update.note = input.note?.trim() || null;
+    }
+    if (nextStatus === DONATION_STATUS.Completed && !row.completedAt) {
+      update.completedAt = now;
+    }
+
+    await tx.donorList.updateMany({
+      where: { id: row.id },
+      data: update,
+    });
+
+    const message = `Your donation status was updated to ${statusName(nextStatus)}.`;
+    await notifyUser(tx, pushes, row.donorId, message, row.id);
+
+    return {
+      id: row.id,
+      monasterySpaceId: row.monasterySpaceId,
+      status: nextStatus,
+      note: input.note !== undefined ? input.note?.trim() || null : row.note,
+    };
+  });
+}
+
 // ============================================================================
 // Backward-Compatibility Factory & Singleton (for tests & existing callers)
 // ============================================================================
@@ -1180,6 +1301,8 @@ export function createDonationService(db: Database = defaultPrisma, delivery: De
       isManual = false
     ) => createRecurringDonationService(userId, spaceId, input, isManual, db, delivery),
     list: (userId: number, query: DonationQueryInput) => getDonationsService(userId, query, db),
+    feed: (userId: number, query: DonationFeedQueryInput) =>
+      getDonationsFeedService(userId, query, db),
     get: (userId: number, donationId: number, spaceId?: number) =>
       getDonationByIdService(userId, donationId, spaceId, db),
     monthly: (userId: number, query: MonthlyQueryInput) =>
@@ -1199,6 +1322,12 @@ export function createDonationService(db: Database = defaultPrisma, delivery: De
     ) => reviewDonationSeriesService(userId, seriesId, input, spaceId, db, delivery),
     cancelSeries: (userId: number, seriesId: string, note?: string | null, spaceId?: number) =>
       cancelDonationSeriesService(userId, seriesId, note, spaceId, db, delivery),
+    updateStatus: (
+      userId: number,
+      donationId: number,
+      input: UpdateDonationStatusInput,
+      spaceId?: number
+    ) => updateDonationStatusService(userId, donationId, input, spaceId, db, delivery),
     authorizeEndpoint: (userId: number, permission: DonationPermission, spaceId?: number) =>
       authorizeDonationEndpointService(userId, permission, spaceId, db),
   };
