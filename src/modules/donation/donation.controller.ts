@@ -1,7 +1,12 @@
 import type { NextFunction, Request, RequestHandler, Response } from 'express';
-import { successResponse } from '@/utils/response';
+import {
+  sendCursorPaginatedResponse,
+  sendPaginatedResponse,
+  sendSuccessResponse,
+} from '@/utils/response';
 import {
   type BatchDonationInput,
+  type DonationFeedQueryInput,
   type DonationInput,
   type DonationQueryInput,
   type ManualDonationInput,
@@ -11,6 +16,7 @@ import {
   type RecurringInput,
   type ReviewDonationInput,
   type ScheduleDonationInput,
+  type UpdateDonationStatusInput,
 } from './donation.schema';
 import {
   authorizeDonationEndpointService,
@@ -23,13 +29,16 @@ import {
   createRecurringDonationService,
   deleteDonationService,
   getDonationByIdService,
+  getDonationsFeedService,
   getDonationsService,
   getMonthlyDonationSummaryService,
   requestDonationService,
   reviewDonationSeriesService,
   reviewDonationService,
   scheduleDonationService,
+  updateDonationStatusService,
 } from './donation.service';
+import { DONATION_STATUS_METADATA } from './donation.types';
 
 function getCustomService(req: Request) {
   return (req as unknown as { donationService?: ReturnType<typeof createDonationService> })
@@ -72,7 +81,7 @@ export const requestDonation = async (req: Request, res: Response, next: NextFun
     const result = customSvc
       ? await customSvc.request(req.user.userId, spaceId, body)
       : await requestDonationService(req.user.userId, spaceId, body);
-    return successResponse(res, result, 'Donation request submitted successfully', 201);
+    return sendSuccessResponse(res, result, 'Donation requested successfully.', 200);
   } catch (err) {
     next(err);
   }
@@ -86,7 +95,7 @@ export const createManualDonation = async (req: Request, res: Response, next: Ne
     const result = customSvc
       ? await customSvc.manual(req.user.userId, spaceId, body)
       : await createManualDonationService(req.user.userId, spaceId, body);
-    return successResponse(res, result, 'Manual donation recorded successfully', 201);
+    return sendSuccessResponse(res, result, 'Donation created successfully.', 200);
   } catch (err) {
     next(err);
   }
@@ -100,7 +109,7 @@ export const createBatchDonations = async (req: Request, res: Response, next: Ne
     const result = customSvc
       ? await customSvc.batch(req.user.userId, spaceId, body)
       : await createBatchDonationsService(req.user.userId, spaceId, body);
-    return successResponse(res, result, 'Batch donations created successfully', 201);
+    return sendSuccessResponse(res, result, 'Donations created successfully.', 200);
   } catch (err) {
     next(err);
   }
@@ -114,7 +123,7 @@ export const requestRecurringDonation = async (req: Request, res: Response, next
     const result = customSvc
       ? await customSvc.recurring(req.user.userId, spaceId, body, false)
       : await createRecurringDonationService(req.user.userId, spaceId, body, false);
-    return successResponse(res, result, 'Recurring donation series requested successfully', 201);
+    return sendSuccessResponse(res, result, 'Recurring donations created successfully.', 200);
   } catch (err) {
     next(err);
   }
@@ -132,7 +141,7 @@ export const createManualRecurringDonation = async (
     const result = customSvc
       ? await customSvc.recurring(req.user.userId, spaceId, body, true)
       : await createRecurringDonationService(req.user.userId, spaceId, body, true);
-    return successResponse(res, result, 'Recurring donation series created successfully', 201);
+    return sendSuccessResponse(res, result, 'Recurring donations created successfully.', 200);
   } catch (err) {
     next(err);
   }
@@ -169,15 +178,52 @@ export const getDonations = async (req: Request, res: Response, next: NextFuncti
     const result = customSvc
       ? await customSvc.list(req.user.userId, query)
       : await getDonationsService(req.user.userId, query);
-    return res.json({
-      success: true,
-      message: 'Donations retrieved successfully',
-      data: result.items,
-      pagination: result.pagination,
-    });
+    return sendPaginatedResponse(res, result.items, result.pagination, 'Success', 200);
   } catch (err) {
     next(err);
   }
+};
+
+export const getDonationsFeed = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const spaceId = req.params.spaceId !== undefined ? Number(req.params.spaceId) : undefined;
+    const customSvc = getCustomService(req);
+    if (customSvc) {
+      await customSvc.authorizeEndpoint(req.user.userId, 'Donation.View', spaceId);
+    } else {
+      await authorizeDonationEndpointService(req.user.userId, 'Donation.View', spaceId);
+    }
+
+    const queryMonasterySpaceId =
+      spaceId !== undefined
+        ? spaceId
+        : req.query.monasterySpaceId !== undefined
+          ? Number(req.query.monasterySpaceId)
+          : undefined;
+
+    const query: DonationFeedQueryInput = {
+      ...req.query,
+      pageSize: req.query.pageSize !== undefined ? Number(req.query.pageSize) : 15,
+      ...(req.query.lastId !== undefined ? { lastId: Number(req.query.lastId) } : {}),
+      ...(req.query.status !== undefined
+        ? { status: queryStatusSchema.parse(req.query.status) }
+        : {}),
+      ...(queryMonasterySpaceId !== undefined ? { monasterySpaceId: queryMonasterySpaceId } : {}),
+      ...(req.query.donorId !== undefined ? { donorId: Number(req.query.donorId) } : {}),
+    };
+
+    const result = customSvc?.feed
+      ? await customSvc.feed(req.user.userId, query)
+      : await getDonationsFeedService(req.user.userId, query);
+
+    return sendCursorPaginatedResponse(res, result.items, result.pagination, 'Success', 200);
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const getDonationStatuses = (_req: Request, res: Response) => {
+  return sendSuccessResponse(res, DONATION_STATUS_METADATA, 'Success', 200);
 };
 
 export const getDonationById = async (req: Request, res: Response, next: NextFunction) => {
@@ -193,7 +239,7 @@ export const getDonationById = async (req: Request, res: Response, next: NextFun
     const result = customSvc
       ? await customSvc.get(req.user.userId, donationId, spaceId)
       : await getDonationByIdService(req.user.userId, donationId, spaceId);
-    return successResponse(res, result, 'Donation retrieved successfully');
+    return sendSuccessResponse(res, result, 'Success', 200);
   } catch (err) {
     next(err);
   }
@@ -233,7 +279,7 @@ export const getMonthlySummary = async (req: Request, res: Response, next: NextF
     const result = customSvc
       ? await customSvc.monthly(req.user.userId, query)
       : await getMonthlyDonationSummaryService(req.user.userId, query);
-    return successResponse(res, result, 'Monthly calendar summary retrieved successfully');
+    return sendSuccessResponse(res, result, 'Success', 200);
   } catch (err) {
     next(err);
   }
@@ -253,7 +299,7 @@ export const reviewDonation = async (req: Request, res: Response, next: NextFunc
     const result = customSvc
       ? await customSvc.change(req.user.userId, donationId, 'review', input, spaceId)
       : await reviewDonationService(req.user.userId, donationId, input, spaceId);
-    return successResponse(res, result, 'Donation review successful');
+    return sendSuccessResponse(res, result, 'Donation reviewed successfully.', 200);
   } catch (err) {
     next(err);
   }
@@ -273,7 +319,7 @@ export const scheduleDonation = async (req: Request, res: Response, next: NextFu
     const result = customSvc
       ? await customSvc.change(req.user.userId, donationId, 'schedule', input, spaceId)
       : await scheduleDonationService(req.user.userId, donationId, input, spaceId);
-    return successResponse(res, result, 'Donation schedule successful');
+    return sendSuccessResponse(res, result, 'Donation scheduled successfully.', 200);
   } catch (err) {
     next(err);
   }
@@ -292,7 +338,7 @@ export const completeDonation = async (req: Request, res: Response, next: NextFu
     const result = customSvc
       ? await customSvc.change(req.user.userId, donationId, 'complete', {}, spaceId)
       : await completeDonationService(req.user.userId, donationId, spaceId);
-    return successResponse(res, result, 'Donation marked complete');
+    return sendSuccessResponse(res, result, 'Donation completed successfully.', 200);
   } catch (err) {
     next(err);
   }
@@ -312,7 +358,7 @@ export const cancelDonation = async (req: Request, res: Response, next: NextFunc
     const result = customSvc
       ? await customSvc.change(req.user.userId, donationId, 'cancel', { note }, spaceId)
       : await cancelDonationService(req.user.userId, donationId, note, spaceId);
-    return successResponse(res, result, 'Donation cancelled successfully');
+    return sendSuccessResponse(res, result, 'Donation cancelled successfully.', 200);
   } catch (err) {
     next(err);
   }
@@ -333,7 +379,27 @@ export const deleteDonation = async (req: Request, res: Response, next: NextFunc
     } else {
       await deleteDonationService(req.user.userId, donationId, spaceId);
     }
-    return successResponse(res, null, 'Donation deleted successfully');
+    return sendSuccessResponse(res, undefined, 'Donation deleted successfully.', 200);
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const updateDonationStatus = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const spaceId = req.params.spaceId !== undefined ? Number(req.params.spaceId) : undefined;
+    const customSvc = getCustomService(req);
+    if (customSvc) {
+      await customSvc.authorizeEndpoint(req.user.userId, 'Donation.Review', spaceId);
+    } else {
+      await authorizeDonationEndpointService(req.user.userId, 'Donation.Review', spaceId);
+    }
+    const donationId = resolveDonationId(req);
+    const input = req.body as UpdateDonationStatusInput;
+    const result = customSvc?.updateStatus
+      ? await customSvc.updateStatus(req.user.userId, donationId, input, spaceId)
+      : await updateDonationStatusService(req.user.userId, donationId, input, spaceId);
+    return sendSuccessResponse(res, result, 'Donation status updated successfully.', 200);
   } catch (err) {
     next(err);
   }
@@ -353,7 +419,12 @@ export const reviewDonationSeries = async (req: Request, res: Response, next: Ne
     const result = customSvc
       ? await customSvc.reviewSeries(req.user.userId, seriesId, input, spaceId)
       : await reviewDonationSeriesService(req.user.userId, seriesId, input, spaceId);
-    return successResponse(res, result, 'Recurring donation series reviewed successfully');
+    return sendSuccessResponse(
+      res,
+      result,
+      'Recurring donation series reviewed successfully.',
+      200
+    );
   } catch (err) {
     next(err);
   }
@@ -373,7 +444,12 @@ export const cancelDonationSeries = async (req: Request, res: Response, next: Ne
     const result = customSvc
       ? await customSvc.cancelSeries(req.user.userId, seriesId, note, spaceId)
       : await cancelDonationSeriesService(req.user.userId, seriesId, note, spaceId);
-    return successResponse(res, result, 'Recurring donation series cancelled successfully');
+    return sendSuccessResponse(
+      res,
+      result,
+      'Recurring donation series cancelled successfully.',
+      200
+    );
   } catch (err) {
     next(err);
   }
