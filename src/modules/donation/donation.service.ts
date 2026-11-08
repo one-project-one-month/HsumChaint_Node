@@ -195,8 +195,10 @@ export function isSystemAdmin(user: {
   role?: { name?: string | null } | null;
 }): boolean {
   return (
+    user.roleId === 3 ||
     user.roleId === 4 ||
-    (typeof user.role?.name === 'string' && user.role.name.trim().toLowerCase() === 'system admin')
+    (typeof user.role?.name === 'string' &&
+      ['admin', 'system admin', 'superadmin'].includes(user.role.name.trim().toLowerCase()))
   );
 }
 
