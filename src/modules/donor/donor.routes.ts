@@ -17,6 +17,7 @@ const router = Router();
 
 router.get('/', getAllDonors);
 
+router.post('/', validateCreateDonor, createDonor);
 router.post('/create', validateCreateDonor, createDonor);
 
 router.get('/:id', validateGetDonorById, getDonorById);
