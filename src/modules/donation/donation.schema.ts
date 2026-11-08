@@ -25,7 +25,32 @@ function enumCode<T extends Record<string, number>>(values: T) {
   ]);
 }
 
-export const statusCodeSchema = enumCode(DONATION_STATUS);
+export const statusCodeSchema = z.preprocess(
+  (val) => {
+    if (typeof val === 'string' && /^\d+$/.test(val)) return Number(val);
+    return val;
+  },
+  z.union([
+    z
+      .number()
+      .int()
+      .min(0)
+      .max(7)
+      .transform((n) => {
+        if (n === 6) return DONATION_STATUS.Rejected; // 4
+        if (n === 7) return DONATION_STATUS.Cancelled; // 5
+        return n;
+      }),
+    z
+      .enum(
+        Object.keys(DONATION_STATUS) as [
+          keyof typeof DONATION_STATUS,
+          ...(keyof typeof DONATION_STATUS)[],
+        ]
+      )
+      .transform((name) => DONATION_STATUS[name]),
+  ])
+);
 export const typeCodeSchema = enumCode(DONATION_TYPE);
 
 export const queryStatusSchema = z.preprocess(
@@ -172,10 +197,20 @@ export const monthlyQueryInputSchema = z.object({
 
 export const reviewDonationInputSchema = z
   .object({
-    status: statusCodeSchema.refine(
-      (val) => val === DONATION_STATUS.Accepted || val === DONATION_STATUS.Rejected,
-      'Review status must be Accepted (3) or Rejected (6)'
-    ),
+    status: statusCodeSchema
+      .refine(
+        (val) =>
+          val === DONATION_STATUS.Accepted ||
+          val === DONATION_STATUS.Rejected ||
+          val === 3 ||
+          val === 6,
+        'Review status must be Accepted (1) or Rejected (4)'
+      )
+      .transform((val) => {
+        if (val === 3) return DONATION_STATUS.Accepted;
+        if (val === 6) return DONATION_STATUS.Rejected;
+        return val;
+      }),
     note: z.string().max(1000).nullable().optional(),
   })
   .strict();
@@ -373,6 +408,53 @@ export const cancelDonationSchema = z.object({
   body: cancelDonationInputSchema.optional(),
 });
 
+export const donationFeedQueryInputSchema = z
+  .object({
+    monasterySpaceId: idSchema.optional(),
+    donorId: idSchema.optional(),
+    status: queryStatusSchema.optional(),
+    fromDate: dateTimeSchema.optional(),
+    toDate: dateTimeSchema.optional(),
+    lastId: z.coerce.number().int().positive().optional(),
+    pageSize: z.coerce.number().int().min(1).max(100).default(15),
+  })
+  .refine(
+    (data) =>
+      !data.fromDate || !data.toDate || Date.parse(data.fromDate) <= Date.parse(data.toDate),
+    'Date range must be ordered'
+  );
+
+export const updateDonationStatusInputSchema = z
+  .object({
+    status: statusCodeSchema,
+    note: z.string().max(1000).nullable().optional(),
+  })
+  .strict();
+
+export const donationFeedQuerySchema = z
+  .object({
+    params: z.object({ spaceId: idSchema.optional() }).optional(),
+    query: donationFeedQueryInputSchema,
+  })
+  .refine((data) => checkSpaceMatch(data.params, data.query), {
+    message: 'Query monasterySpaceId must match the URL',
+    path: ['query', 'monasterySpaceId'],
+  });
+
+export const updateDonationStatusSchema = z.object({
+  params: z
+    .object({
+      id: idSchema.optional(),
+      donationId: idSchema.optional(),
+      spaceId: idSchema.optional(),
+    })
+    .refine((data) => data.id !== undefined || data.donationId !== undefined, {
+      message: 'Donation ID is required',
+      path: ['donationId'],
+    }),
+  body: updateDonationStatusInputSchema,
+});
+
 export const reviewSeriesSchema = z.object({
   params: z.object({
     seriesId: z.string().trim().min(1).max(64),
@@ -401,10 +483,12 @@ export type RecurringInput = z.infer<typeof recurringInputSchema>;
 export type ManualRecurringInput = z.infer<typeof manualRecurringInputSchema>;
 export type RequestRecurringInput = RecurringInput & { monasterySpaceId?: number };
 export type DonationQueryInput = z.infer<typeof donationQueryInputSchema>;
+export type DonationFeedQueryInput = z.infer<typeof donationFeedQueryInputSchema>;
 export type MonthlyQueryInput = z.infer<typeof monthlyQueryInputSchema>;
 export type ReviewDonationInput = z.infer<typeof reviewDonationInputSchema>;
 export type ScheduleDonationInput = z.infer<typeof scheduleDonationInputSchema>;
 export type CancelDonationInput = z.infer<typeof cancelDonationInputSchema>;
+export type UpdateDonationStatusInput = z.infer<typeof updateDonationStatusInputSchema>;
 
 export type { DonationPermission, DonationStatus };
 
