@@ -1,10 +1,12 @@
 import type { NextFunction, Request, Response } from 'express';
 import type { PaginationQueryType } from '../../helper/paginationSchema';
-import { successResponse } from '../../utils/response';
+import {
+  type PaginationMeta,
+  sendErrorResponse,
+  sendPaginatedResponse,
+  sendSuccessResponse,
+} from '../../utils/response';
 import type { CreateDonorType, GetAllDonorsQueryType, UpdateDonorType } from './donor.schema';
-
-type DonorIdParam = { id: string };
-
 import {
   createDonorService,
   deleteDonorService,
@@ -12,6 +14,8 @@ import {
   getDonorByIdService,
   updateDonorService,
 } from './donor.service';
+
+type DonorIdParam = { id: string };
 
 const createDonor = async (
   req: Request<unknown, unknown, CreateDonorType['body']>,
@@ -23,7 +27,7 @@ const createDonor = async (
       return next(new Error('Request body is required'));
     }
     const donor = await createDonorService({ body: req.body });
-    return successResponse(res, donor, 'Donor created successfully', 201);
+    return sendSuccessResponse(res, donor, 'Donor created successfully.', 200);
   } catch (error) {
     next(error);
   }
@@ -38,12 +42,30 @@ const getAllDonors = async (req: Request, res: Response, next: NextFunction) => 
       page = '1',
       limit = '10',
     } = req.query as Partial<GetAllDonorsQueryType['query'] & PaginationQueryType>;
+    const pageNumber = Number(page) || 1;
+    const pageSize = Number(limit) || 10;
     const result = await getAllDonorsService(
       req,
       { name, email, phoneNo },
-      { page: Number(page) || 1, limit: Number(limit) || 10 }
+      { page: pageNumber, limit: pageSize }
     );
-    return successResponse(res, result, 'Donors retrieved successfully');
+    const totalCount = result.pagination.meta.total;
+    const totalPages = Math.ceil(totalCount / pageSize) || 1;
+    const paginationMeta: PaginationMeta = {
+      pageNumber,
+      pageSize,
+      totalCount,
+      totalPages,
+      hasPreviousPage: pageNumber > 1,
+      hasNextPage: pageNumber < totalPages,
+    };
+    return sendPaginatedResponse(
+      res,
+      result.donors,
+      paginationMeta,
+      'Donors retrieved successfully.',
+      200
+    );
   } catch (error) {
     next(error);
   }
@@ -54,14 +76,11 @@ const getDonorById = async (req: Request<DonorIdParam>, res: Response, next: Nex
     const id = Number(req.params.id);
 
     if (Number.isNaN(id)) {
-      return res.status(400).json({
-        success: false,
-        message: 'Invalid donor ID. ID must be a number.',
-      });
+      return sendErrorResponse(res, null, 'Invalid donor ID. ID must be a number.', 400);
     }
 
     const donor = await getDonorByIdService(id);
-    return successResponse(res, donor, 'Donor retrieved successfully');
+    return sendSuccessResponse(res, donor, 'Donor retrieved successfully.', 200);
   } catch (error) {
     next(error);
   }
@@ -75,7 +94,7 @@ const updateDonor = async (
   try {
     const id = Number(req.params.id);
     const donor = await updateDonorService(id, { body: req.body });
-    return successResponse(res, donor, 'Donor updated successfully');
+    return sendSuccessResponse(res, donor, 'Donor updated successfully.', 200);
   } catch (error) {
     next(error);
   }
@@ -84,8 +103,8 @@ const updateDonor = async (
 const deleteDonor = async (req: Request<DonorIdParam>, res: Response, next: NextFunction) => {
   try {
     const id = Number(req.params.id);
-    const donor = await deleteDonorService(id);
-    return successResponse(res, donor, 'Donor deleted successfully');
+    await deleteDonorService(id);
+    return sendSuccessResponse(res, undefined, 'Donor deleted successfully.', 200);
   } catch (error) {
     next(error);
   }
