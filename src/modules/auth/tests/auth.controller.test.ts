@@ -1,7 +1,6 @@
 import { beforeEach, describe, expect, it, mock } from 'bun:test';
 import type { Request, Response } from 'express';
-import { getLoginMode, login, refreshAccessToken, register } from './auth.controller';
-import type { LoginInput, RefreshTokenInput, RegisterInput } from './auth.schema';
+import { getLoginMode, login, refreshAccessToken, register } from '../auth.controller';
 
 const mockRedisStore = new Map<string, string>();
 
@@ -22,8 +21,8 @@ mock.module('@/lib/redis', () => ({
 
 mock.module('@/middlewares/permissionMiddleware', () => ({
   getRolePermissions: mock(async (roleId: number) => {
-    if (roleId === 1) return ['Monastery.Create', 'Donation.Create', 'Donation.View'];
-    if (roleId === 2) return ['Donation.View', 'Donation.Create'];
+    if (roleId === 2) return ['Monastery.Create', 'Donation.Create', 'Donation.View'];
+    if (roleId === 3) return ['Donation.View', 'Donation.Create'];
     return [
       'Donation.View',
       'Donation.Create',
@@ -116,7 +115,7 @@ describe('Auth Controller Tests (.NET Alignment)', () => {
   describe('register', () => {
     it('returns 200 OK with exact .NET void envelope on successful registration', async () => {
       prisma.user.findFirst = mock(async () => null);
-      prisma.role.findUnique = mock(async () => ({ id: 2, name: 'Donor' }));
+      prisma.role.findUnique = mock(async () => ({ id: 3, name: 'Donor' }));
       prisma.$transaction = mock(async (cb: (tx: unknown) => Promise<unknown>) => {
         const tx = {
           user: {
@@ -124,7 +123,7 @@ describe('Auth Controller Tests (.NET Alignment)', () => {
               id: 11,
               phone: '09750385592',
               name: 'Than Thar',
-              roleId: 2,
+              roleId: 3,
               createdAt: new Date(),
             })),
           },
@@ -136,35 +135,39 @@ describe('Auth Controller Tests (.NET Alignment)', () => {
       const req = {
         body: {
           name: 'Than Thar',
-          phone: '09750385592',
           phoneNumber: '09750385592',
           password: 'Password123!',
-          roleId: 2,
+          roleId: 3,
         },
-      } as unknown as Request<unknown, unknown, RegisterInput>;
+      } as unknown as Request;
       const res = createMockRes();
       const next = mock(() => {});
 
       await register(req, res, next);
 
       expect(res.statusCode).toBe(200);
-      expect(res.body).toEqual({
-        isSuccess: true,
-        message: 'Register Successful',
-        isFailure: false,
+      expect(res.body.isSuccess).toBe(true);
+      expect(res.body.message).toBe('Register Successful');
+      expect(res.body.isFailure).toBe(false);
+      expect(res.body.data).toEqual({
+        id: 11,
+        roleId: 3,
+        roleName: 'Donor',
+        accessToken: expect.any(String),
+        refreshToken: expect.any(String),
+        permissions: ['Donation.View', 'Donation.Create'],
       });
-      expect(res.body.data).toBeUndefined();
     });
 
-    it('rejects attempt to register as protected Admin role (roleId: 3) with 403 Forbidden', async () => {
+    it('rejects attempt to register as protected Admin role (roleId: 1) with 403 Forbidden', async () => {
       const req = {
         body: {
           name: 'Hacker Admin',
-          phone: '09999999998',
+          phoneNumber: '09999999998',
           password: 'Password123!',
-          roleId: 3,
+          roleId: 1,
         },
-      } as unknown as Request<unknown, unknown, RegisterInput>;
+      } as unknown as Request;
       const res = createMockRes();
       const next = mock(() => {});
 
@@ -179,13 +182,13 @@ describe('Auth Controller Tests (.NET Alignment)', () => {
       const req = {
         body: {
           name: 'Than Thar',
-          phone: '09750385592',
+          phoneNumber: '09750385592',
           password: 'Than1234@',
-          roleId: 2,
+          roleId: 3,
           monasteryName: 'Ti-Nilar Monastery',
           monasteryAddress: 'Pyin Oo Lwin',
         },
-      } as unknown as Request<unknown, unknown, RegisterInput>;
+      } as unknown as Request;
       const res = createMockRes();
       const next = mock(() => {});
 
@@ -205,17 +208,17 @@ describe('Auth Controller Tests (.NET Alignment)', () => {
         phone: '09999999999',
         name: 'SuperAdmin',
         password,
-        roleId: 3,
-        role: { id: 3, name: 'Admin' },
+        roleId: 1,
+        role: { id: 1, name: 'Admin' },
         monkProfile: null,
       }));
 
       const req = {
         body: {
-          phone: '09999999999',
+          phoneNumber: '09999999999',
           password: 'Password123!',
         },
-      } as unknown as Request<unknown, unknown, LoginInput>;
+      } as unknown as Request;
       const res = createMockRes();
       const next = mock(() => {});
 
@@ -227,7 +230,7 @@ describe('Auth Controller Tests (.NET Alignment)', () => {
       expect(res.body.isFailure).toBe(false);
       expect(res.body.data).toEqual({
         id: 1,
-        roleId: 3,
+        roleId: 1,
         roleName: 'Admin',
         permissions: [
           'Donation.View',
@@ -237,8 +240,8 @@ describe('Auth Controller Tests (.NET Alignment)', () => {
           'Role.View',
           'Role.Create',
         ],
-        accessToken: 'mock_jwt_access_token_1_3',
-        refreshToken: 'mock_jwt_refresh_token_1_3',
+        accessToken: 'mock_jwt_access_token_1_1',
+        refreshToken: 'mock_jwt_refresh_token_1_1',
       });
       // Ensure extra legacy fields are removed
       expect(res.body.data?.token).toBeUndefined();
@@ -252,10 +255,10 @@ describe('Auth Controller Tests (.NET Alignment)', () => {
 
       const req = {
         body: {
-          phone: '09999999999',
+          phoneNumber: '09999999999',
           password: 'wrongPassword',
         },
-      } as unknown as Request<unknown, unknown, LoginInput>;
+      } as unknown as Request;
       const res = createMockRes();
       const next = mock(() => {});
 
@@ -288,7 +291,7 @@ describe('Auth Controller Tests (.NET Alignment)', () => {
       prisma.$transaction = mock(async (cb: (tx: unknown) => Promise<unknown>) => {
         const tx = {
           user: {
-            findFirst: mock(async () => ({ id: 2, roleId: 1, role: { name: 'Monk' } })),
+            findFirst: mock(async () => ({ id: 2, roleId: 2, role: { name: 'Monk' } })),
           },
           refreshToken: {
             update: mock(async () => ({})),
@@ -303,7 +306,7 @@ describe('Auth Controller Tests (.NET Alignment)', () => {
           refreshToken: validRefreshToken,
         },
         cookies: {},
-      } as unknown as Request<unknown, unknown, RefreshTokenInput>;
+      } as unknown as Request;
       const res = createMockRes();
       const next = mock(() => {});
 
@@ -315,11 +318,11 @@ describe('Auth Controller Tests (.NET Alignment)', () => {
       expect(res.body.isFailure).toBe(false);
       expect(res.body.data).toEqual({
         id: 2,
-        roleId: 1,
+        roleId: 2,
         roleName: 'Monk',
         permissions: ['Monastery.Create', 'Donation.Create', 'Donation.View'],
-        accessToken: 'mock_jwt_access_token_2_1',
-        refreshToken: 'mock_jwt_refresh_token_2_1',
+        accessToken: 'mock_jwt_access_token_2_2',
+        refreshToken: 'mock_jwt_refresh_token_2_2',
       });
       expect(res.body.data?.token).toBeUndefined();
     });
@@ -331,7 +334,7 @@ describe('Auth Controller Tests (.NET Alignment)', () => {
           refreshToken: 'invalid.bogus.jwt.token',
         },
         cookies: {},
-      } as unknown as Request<unknown, unknown, RefreshTokenInput>;
+      } as unknown as Request;
       const res = createMockRes();
       const next = mock(() => {});
 
@@ -347,7 +350,7 @@ describe('Auth Controller Tests (.NET Alignment)', () => {
       const jwt = await import('jsonwebtoken');
       const { env } = await import('@/config/env');
       const tokenForUser2 = jwt.default.sign(
-        { userId: 2, roleId: 1 },
+        { userId: 2, roleId: 2 },
         env.JWT_REFRESH_TOKEN_SECRET,
         { expiresIn: '7d' }
       );
@@ -358,7 +361,7 @@ describe('Auth Controller Tests (.NET Alignment)', () => {
           refreshToken: tokenForUser2,
         },
         cookies: {},
-      } as unknown as Request<unknown, unknown, RefreshTokenInput>;
+      } as unknown as Request;
       const res = createMockRes();
       const next = mock(() => {});
 

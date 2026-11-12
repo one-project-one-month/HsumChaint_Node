@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, mock } from 'bun:test';
-import { loginUser, refreshTokenService, registerUser } from './auth.service';
+import { loginUser, refreshTokenService, registerUser } from '../auth.service';
 
 const mockRedisStore = new Map<string, string>();
 
@@ -39,8 +39,8 @@ mock.module('@/lib/redis', () => ({
 
 mock.module('@/middlewares/permissionMiddleware', () => ({
   getRolePermissions: mock(async (roleId: number) => {
-    if (roleId === 1) return ['Monastery.Create', 'Donation.Create', 'Donation.View'];
-    if (roleId === 2) return ['Donation.View', 'Donation.Create'];
+    if (roleId === 2) return ['Monastery.Create', 'Donation.Create', 'Donation.View'];
+    if (roleId === 3) return ['Donation.View', 'Donation.Create'];
     return ['User.View', 'Role.View'];
   }),
 }));
@@ -56,26 +56,26 @@ mock.module('@/utils/cache.util', () => ({
   clearUserListCache: mock(async () => {}),
 }));
 
-describe('Auth Service (Current System State: 1=Monk, 2=Donor, 3=Admin)', () => {
+describe('Auth Service (.NET C# Alignment: 1=Admin, 2=Monk, 3=Donor)', () => {
   beforeEach(() => {
     mockRedisStore.clear();
   });
 
   describe('registerUser', () => {
-    it('returns flattened response for Monk registration (roleId: 1)', async () => {
+    it('returns flattened response for Monk registration (roleId: 2)', async () => {
       const mockCreatedUser = {
         id: 201,
         phone: '09100000001',
         name: 'U Thuzana',
         email: 'thuzana@monastery.org',
-        roleId: 1, // Monk
+        roleId: 2, // Monk
         contactPhone: '09100000001',
         avatar: undefined,
         createdAt: new Date(),
       };
 
       prisma.user.findFirst = mock(async () => null);
-      prisma.role.findUnique = mock(async () => ({ id: 1, name: 'Monk' }));
+      prisma.role.findUnique = mock(async () => ({ id: 2, name: 'Monk' }));
       prisma.$transaction = mock(async (cb: (tx: unknown) => Promise<unknown>) => {
         const tx = {
           user: {
@@ -95,37 +95,37 @@ describe('Auth Service (Current System State: 1=Monk, 2=Donor, 3=Admin)', () => 
 
       const response = await registerUser({
         name: 'U Thuzana',
-        phone: '09100000001',
+        phoneNumber: '09100000001',
         password: 'Password123!',
-        roleId: 1, // Monk
+        roleId: 2, // Monk
         monasteryName: 'Mahasi Yeiktha',
         monasteryAddress: 'Yangon',
         email: 'thuzana@monastery.org',
-        contactPhone: '09100000001',
+        contactPhoneNumber: '09100000001',
       });
 
       expect(response.id).toBe(201);
-      expect(response.roleId).toBe(1);
+      expect(response.roleId).toBe(2);
       expect(response.roleName).toBe('Monk');
-      expect(response.accessToken).toBe('access_token_for_201_1');
-      expect(response.refreshToken).toBe('refresh_token_for_201_1');
+      expect(response.accessToken).toBe('access_token_for_201_2');
+      expect(response.refreshToken).toBe('refresh_token_for_201_2');
       expect(Array.isArray(response.permissions)).toBe(true);
     });
 
-    it('returns flattened response for Donor registration (roleId: 2)', async () => {
+    it('returns flattened response for Donor registration (roleId: 3)', async () => {
       const mockCreatedUser = {
         id: 202,
         phone: '09100000002',
         name: 'Daw Hla',
         email: 'dawhla@gmail.com',
-        roleId: 2, // Donor
+        roleId: 3, // Donor
         contactPhone: undefined,
         avatar: undefined,
         createdAt: new Date(),
       };
 
       prisma.user.findFirst = mock(async () => null);
-      prisma.role.findUnique = mock(async () => ({ id: 2, name: 'Donor' }));
+      prisma.role.findUnique = mock(async () => ({ id: 3, name: 'Donor' }));
       prisma.$transaction = mock(async (cb: (tx: unknown) => Promise<unknown>) => {
         const tx = {
           user: {
@@ -140,22 +140,22 @@ describe('Auth Service (Current System State: 1=Monk, 2=Donor, 3=Admin)', () => 
 
       const response = await registerUser({
         name: 'Daw Hla',
-        phone: '09100000002',
+        phoneNumber: '09100000002',
         password: 'Password123!',
-        roleId: 2, // Donor
+        roleId: 3, // Donor
       });
 
       expect(response.id).toBe(202);
-      expect(response.roleId).toBe(2);
+      expect(response.roleId).toBe(3);
       expect(response.roleName).toBe('Donor');
-      expect(response.accessToken).toBe('access_token_for_202_2');
-      expect(response.refreshToken).toBe('refresh_token_for_202_2');
+      expect(response.accessToken).toBe('access_token_for_202_3');
+      expect(response.refreshToken).toBe('refresh_token_for_202_3');
       expect(Array.isArray(response.permissions)).toBe(true);
     });
   });
 
   describe('loginUser', () => {
-    it('returns authenticated user DTO matching roleId: 1 for Monk', async () => {
+    it('returns authenticated user DTO matching roleId: 2 for Monk', async () => {
       const hashedPassword = await Bun.password.hash('Password123!');
       const mockUser = {
         id: 201,
@@ -163,7 +163,7 @@ describe('Auth Service (Current System State: 1=Monk, 2=Donor, 3=Admin)', () => 
         name: 'U Thuzana',
         password: hashedPassword,
         email: 'thuzana@monastery.org',
-        roleId: 1,
+        roleId: 2,
         contactPhone: null,
         avatar: null,
         createdAt: new Date(),
@@ -173,25 +173,25 @@ describe('Auth Service (Current System State: 1=Monk, 2=Donor, 3=Admin)', () => 
           monasteryName: 'Mahasi Yeiktha',
           monasteryAddress: 'Yangon',
         },
-        role: { id: 1, name: 'Monk' },
+        role: { id: 2, name: 'Monk' },
       };
 
       prisma.user.findUnique = mock(async () => mockUser);
 
       const response = await loginUser({
-        phone: '09100000001',
+        phoneNumber: '09100000001',
         password: 'Password123!',
       });
 
       expect(response.id).toBe(201);
-      expect(response.roleId).toBe(1);
+      expect(response.roleId).toBe(2);
       expect(response.roleName).toBe('Monk');
-      expect(response.accessToken).toBe('access_token_for_201_1');
-      expect(response.refreshToken).toBe('refresh_token_for_201_1');
+      expect(response.accessToken).toBe('access_token_for_201_2');
+      expect(response.refreshToken).toBe('refresh_token_for_201_2');
       expect(Array.isArray(response.permissions)).toBe(true);
     });
 
-    it('returns authenticated user DTO matching roleId: 2 for Donor', async () => {
+    it('returns authenticated user DTO matching roleId: 3 for Donor', async () => {
       const hashedPassword = await Bun.password.hash('Password123!');
       const mockUser = {
         id: 202,
@@ -199,26 +199,26 @@ describe('Auth Service (Current System State: 1=Monk, 2=Donor, 3=Admin)', () => 
         name: 'Daw Hla',
         password: hashedPassword,
         email: 'dawhla@gmail.com',
-        roleId: 2,
+        roleId: 3,
         contactPhone: null,
         avatar: null,
         createdAt: new Date(),
         monkProfile: null,
-        role: { id: 2, name: 'Donor' },
+        role: { id: 3, name: 'Donor' },
       };
 
       prisma.user.findUnique = mock(async () => mockUser);
 
       const response = await loginUser({
-        phone: '09100000002',
+        phoneNumber: '09100000002',
         password: 'Password123!',
       });
 
       expect(response.id).toBe(202);
-      expect(response.roleId).toBe(2);
+      expect(response.roleId).toBe(3);
       expect(response.roleName).toBe('Donor');
-      expect(response.accessToken).toBe('access_token_for_202_2');
-      expect(response.refreshToken).toBe('refresh_token_for_202_2');
+      expect(response.accessToken).toBe('access_token_for_202_3');
+      expect(response.refreshToken).toBe('refresh_token_for_202_3');
       expect(Array.isArray(response.permissions)).toBe(true);
     });
   });
