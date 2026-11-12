@@ -9,9 +9,9 @@ This document provides a comprehensive technical catalog of all active HTTP endp
 Access control in Hsum Chaint Node is governed by two complementary layers:
 
 1. **System Roles (Global System Level)**:
-   - **`Monk` (Role ID 1)**: Religious administrators who can create and manage Monastery Spaces, manage member invitations, configure donation schedules, and review offerings.
-   - **`Donor` (Role ID 2)**: Devotees and donors who browse monastery spaces, submit donation requests, and track their personal donation history.
-   - **`Admin` (Role ID 3)**: Super-administrators with full oversight across user accounts, system roles, and global permissions.
+   - **`Admin` (Role ID 1)**: Super-administrators with full oversight across user accounts, system roles, and global permissions.
+   - **`Monk` (Role ID 2)**: Religious administrators who can create and manage Monastery Spaces, manage member invitations, configure donation schedules, and review offerings.
+   - **`Donor` (Role ID 3)**: Devotees and donors who browse monastery spaces, submit donation requests, and track their personal donation history.
    - **`Custom Roles`**: Dynamically created by system administrators via the RBAC module.
 
 2. **Space Roles (Monastery Space Level)**:
@@ -182,14 +182,14 @@ All API responses strictly utilize standardized envelopes matching the .NET spec
 - **Method**: `POST`
 - **Route**: `/api/v1/auth/register`
 - **Target User Role**: Public / Unauthenticated
-- **Description**: Registers a new user account. Supports both `Monk` (`roleId: 1`) and `Donor` (`roleId: 2`). When registering as a Monk, `monasteryName` and `monasteryAddress` are mandatory. Accepts both `phoneNumber` and `phone`, and both `contactPhoneNumber` and `contactPhone`.
+- **Description**: Registers a new user account. Supports both `Monk` (`roleId: 2`) and regular User / `Donor` (`roleId: 3`). When registering as a Monk, `monasteryName` and `monasteryAddress` are mandatory. Accepts canonical `phoneNumber` and `contactPhoneNumber`.
 - **Request Body**:
 ```json
 {
   "name": "Ashin Pannita",
   "phoneNumber": "09123456789",
   "password": "Password123!",
-  "roleId": 1,
+  "roleId": 2,
   "monasteryName": "Mahagandhayon Monastery",
   "monasteryAddress": "Amarapura, Mandalay",
   "email": "pannita@monastery.org",
@@ -197,17 +197,15 @@ All API responses strictly utilize standardized envelopes matching the .NET spec
 }
 ```
 - **Responses**:
-  - `201 Created`:
+  - `200 OK`:
 ```json
 {
   "isSuccess": true,
-  "message": "User registered successfully.",
+  "message": "Register Successful",
   "isFailure": false,
   "data": {
-    "userId": 1,
-    "name": "Ashin Pannita",
-    "phoneNumber": "09123456789",
-    "roleId": 1,
+    "id": 2,
+    "roleId": 2,
     "roleName": "Monk",
     "token": "eyJhbGciOiJIUzI1NiIsIn...",
     "refreshToken": "7c9e4b...",

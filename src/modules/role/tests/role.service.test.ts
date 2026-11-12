@@ -254,9 +254,9 @@ mock.module('@/lib/prisma', () => ({
 describe('Role & Dynamic RBAC Service Unit Tests', () => {
   beforeEach(() => {
     mockRoles = [
-      { id: 1, name: 'Monk', isDeleted: false },
-      { id: 2, name: 'Donor', isDeleted: false },
-      { id: 3, name: 'Admin', isDeleted: false },
+      { id: 1, name: 'Admin', isDeleted: false },
+      { id: 2, name: 'Monk', isDeleted: false },
+      { id: 3, name: 'Donor', isDeleted: false },
       { id: 4, name: 'Space Admin', isDeleted: false },
       { id: 5, name: 'Space Moderator', isDeleted: false },
       { id: 6, name: 'Space Editor', isDeleted: false },
@@ -275,18 +275,18 @@ describe('Role & Dynamic RBAC Service Unit Tests', () => {
 
     mockRolePermissions = [
       // Admin gets all
-      { id: 1, roleId: 3, permissionId: 1 },
-      { id: 2, roleId: 3, permissionId: 2 },
-      { id: 3, roleId: 3, permissionId: 3 },
-      { id: 4, roleId: 3, permissionId: 4 },
-      { id: 5, roleId: 3, permissionId: 5 },
+      { id: 1, roleId: 1, permissionId: 1 },
+      { id: 2, roleId: 1, permissionId: 2 },
+      { id: 3, roleId: 1, permissionId: 3 },
+      { id: 4, roleId: 1, permissionId: 4 },
+      { id: 5, roleId: 1, permissionId: 5 },
       // Space Member gets Space.View
       { id: 6, roleId: 7, permissionId: 6 },
     ];
 
     mockUsers = [
-      { id: 1, name: 'Admin User', roleId: 3, isDeleted: false },
-      { id: 2, name: 'Monk User', roleId: 1, isDeleted: false },
+      { id: 1, name: 'Admin User', roleId: 1, isDeleted: false },
+      { id: 2, name: 'Monk User', roleId: 2, isDeleted: false },
     ];
   });
 
@@ -297,7 +297,7 @@ describe('Role & Dynamic RBAC Service Unit Tests', () => {
       expect(result.total).toBe(7);
       expect(result.page).toBe(1);
 
-      const adminRole = result.items.find((r) => r.roleId === 3);
+      const adminRole = result.items.find((r) => r.roleId === 1);
       expect(adminRole).toBeDefined();
       expect(adminRole?.permissions.length).toBe(5);
       expect(adminRole?.permissions[0].module).toBe('Role');
@@ -377,7 +377,7 @@ describe('Role & Dynamic RBAC Service Unit Tests', () => {
 
     it('should reject renaming the system Admin role', async () => {
       expect(
-        updateRoleService(3, {
+        updateRoleService(1, {
           roleName: 'Super Admin',
         })
       ).rejects.toThrow('The system Admin role cannot be renamed or have permissions removed.');
@@ -385,7 +385,7 @@ describe('Role & Dynamic RBAC Service Unit Tests', () => {
 
     it('should reject stripping all permissions from system Admin', async () => {
       expect(
-        updateRoleService(3, {
+        updateRoleService(1, {
           permissionIds: [],
         })
       ).rejects.toThrow('The system Admin role cannot be renamed or have permissions removed.');
@@ -402,7 +402,7 @@ describe('Role & Dynamic RBAC Service Unit Tests', () => {
     });
 
     it('should reject deleting system Admin role', async () => {
-      expect(deleteRoleService(3)).rejects.toThrow('The system Admin role cannot be deleted.');
+      expect(deleteRoleService(1)).rejects.toThrow('The system Admin role cannot be deleted.');
     });
 
     it('should reject deleting a role if active users, members or invitations are assigned to it', async () => {
@@ -474,7 +474,7 @@ describe('Role & Dynamic RBAC Service Unit Tests', () => {
     it('should retrieve full user permission details with userId, roleId, roleName, and permissions', async () => {
       const details = await getUserPermissionsDetailService(1);
       expect(details.userId).toBe(1);
-      expect(details.roleId).toBe(3);
+      expect(details.roleId).toBe(1);
       expect(details.roleName).toBe('Admin');
       expect(details.permissions.length).toBe(5);
       expect(details.permissions).toContain('Role.View');

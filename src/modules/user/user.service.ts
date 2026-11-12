@@ -29,11 +29,11 @@ export const selectUser = {
 export const getRoleName = (roleId: number): string => {
   switch (roleId) {
     case 1:
-      return 'Monk';
-    case 2:
-      return 'Donor';
-    case 3:
       return 'Admin';
+    case 2:
+      return 'Monk';
+    case 3:
+      return 'Donor';
     default:
       return 'User';
   }
@@ -42,7 +42,7 @@ export const getRoleName = (roleId: number): string => {
 export const mapUserDto = (user: {
   id: number;
   name: string;
-  phone: string;
+  phone?: string | null;
   roleId: number;
   email?: string | null;
   contactPhone?: string | null;
@@ -52,8 +52,8 @@ export const mapUserDto = (user: {
 }) => ({
   id: user.id,
   name: user.name,
-  phoneNumber: user.phone,
-  phone: user.phone,
+  phoneNumber: user.phone ?? null,
+  phone: user.phone ?? null,
   roleId: user.roleId,
   roleName: getRoleName(user.roleId),
   email: user.email ?? null,
@@ -193,8 +193,8 @@ export const updateUserService = async (
 
   if (!user || user.isDeleted) throw new AppError('User not found', 404);
 
-  // Business rule: only SuperAdmin (Role ID 3) can change roleId
-  if (data.roleId !== undefined && data.roleId !== user.roleId && callerRoleId !== 3) {
+  // Business rule: only SuperAdmin (Role ID 1 in .NET C# spec) can change roleId
+  if (data.roleId !== undefined && data.roleId !== user.roleId && callerRoleId !== 1) {
     throw new AppError('Changing user role requires administrative privileges', 403);
   }
 
@@ -287,7 +287,7 @@ export const getMonkProfileService = async (userId: number) => {
   });
 
   if (!user) throw new AppError('User not found', 404);
-  if (user.roleId !== 1 || !user.monkProfile) {
+  if (user.roleId !== 2 || !user.monkProfile) {
     throw new AppError('User is not a monk or monk profile does not exist', 400);
   }
 
@@ -308,7 +308,7 @@ export const updateMonkProfileService = async (
   });
 
   if (!user) throw new AppError('User not found', 404);
-  if (user.roleId !== 1) {
+  if (user.roleId !== 2) {
     throw new AppError('Only monk users can update monk profile', 400);
   }
 

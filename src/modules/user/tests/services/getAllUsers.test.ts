@@ -72,7 +72,7 @@ describe('getAllUserService Unit Test (Mocking)', () => {
       phone: '09111111111',
       name: 'apple_donor',
       email: 'apple@test.com',
-      roleId: 2,
+      roleId: 3,
       isDeleted: false,
     },
     {
@@ -80,7 +80,7 @@ describe('getAllUserService Unit Test (Mocking)', () => {
       phone: '09222222222',
       name: 'banana_monk',
       email: 'banana@test.com',
-      roleId: 1,
+      roleId: 2,
       isDeleted: false,
       monkProfile: {
         monasteryName: 'Su Taung Pyae',
@@ -92,7 +92,7 @@ describe('getAllUserService Unit Test (Mocking)', () => {
       phone: '09333333333',
       name: 'cherry_donor',
       email: 'cherry@test.com',
-      roleId: 2,
+      roleId: 3,
       isDeleted: false,
     },
   ];
@@ -211,7 +211,7 @@ describe('getAllUserService Unit Test (Mocking)', () => {
   // Verifies that passing `roleId` filters out users of other types,
   // and that every returned user matches the requested type.
   it('should filter users by roleId (Donor)', async () => {
-    const donors = mockUsers.filter((u) => u.roleId === 2); // [apple_donor, cherry_donor]
+    const donors = mockUsers.filter((u) => u.roleId === 3); // [apple_donor, cherry_donor]
     findManyMock.mockResolvedValue(donors as unknown as User[]);
     countMock.mockResolvedValue(2);
 
@@ -220,13 +220,13 @@ describe('getAllUserService Unit Test (Mocking)', () => {
         query: {
           page: 1,
           limit: 10,
-          roleId: 2,
+          roleId: 3,
         },
       }).query
     );
 
     expect(result.users.length).toBe(2);
-    expect(result.users.every((u: { roleId: number }) => u.roleId === 2)).toBe(true);
+    expect(result.users.every((u: { roleId: number }) => u.roleId === 3)).toBe(true);
   });
 
   // Verifies correct offset calculation for page 2.

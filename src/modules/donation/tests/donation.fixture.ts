@@ -42,7 +42,7 @@ export function donationFixture(withDonation = true) {
     user: [1, 2, 3, 4, 5, 6, 7].map((id) => ({
       id,
       name: `User ${id}`,
-      roleId: id === 1 ? 1 : 2,
+      roleId: id === 1 ? 2 : 3,
       isDeleted: id === 6,
       fcmToken: `token-${id}`,
       role: { isDeleted: false },
@@ -72,10 +72,10 @@ export function donationFixture(withDonation = true) {
   }
 
   for (const name of ['View', 'Create', 'Review', 'Schedule', 'Cancel', 'Delete']) {
-    grant(1, `Donation.${name}`);
+    grant(2, `Donation.${name}`);
   }
   for (const name of ['View', 'Create', 'Cancel']) {
-    grant(2, `Donation.${name}`);
+    grant(3, `Donation.${name}`);
   }
   grant(20, 'Donation.Review');
   grant(21, 'Donation.Schedule');

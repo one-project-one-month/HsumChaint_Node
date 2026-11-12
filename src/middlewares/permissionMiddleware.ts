@@ -177,7 +177,7 @@ export const clearRolePermissionsCache = async (roleId?: number): Promise<void> 
 };
 
 export const isSystemAdminRoleId = (roleId?: number): boolean => {
-  return roleId === 3;
+  return roleId === 1;
 };
 
 /**
@@ -198,8 +198,8 @@ export const checkPermission = (requiredPermission: string) => {
         return next();
       }
 
-      // SuperAdmin bypass
-      if (user.roleId === 3) {
+      // SuperAdmin bypass (Role ID 1 is Admin in .NET C# spec)
+      if (user.roleId === 1) {
         return next();
       }
 
@@ -315,8 +315,8 @@ export const checkSelfOrPermission = (adminPermission: string) => {
         return next();
       }
 
-      // 2. SuperAdmin bypass
-      if (user.roleId === 3) {
+      // 2. SuperAdmin bypass (Role ID 1 is Admin in .NET C# spec)
+      if (user.roleId === 1) {
         return next();
       }
 
@@ -344,7 +344,7 @@ export const checkSelfOrPermission = (adminPermission: string) => {
  * Resolves spaceId from req.params[spaceIdParamName] (or req.params.spaceId, req.params.id, req.body.monasterySpaceId, req.query.monasterySpaceId).
  *
  * Evaluation Rules:
- * 1. SuperAdmin (roleId === 3): Full bypass.
+ * 1. SuperAdmin (roleId === 1): Full bypass.
  * 2. Space Owner (member.isOwner === true): Full access to all space permissions.
  * 3. Space.Delete: Strictly reserved for the owner (even Space Admin cannot delete).
  * 4. Space Admin (spaceRoleId === 1): Full access to all space permissions except Space.Delete.
@@ -358,8 +358,8 @@ export const requireSpacePermission = (requiredPermission: string, spaceIdParamN
         return next(new AppError('Unauthorized: Missing user authentication', 401));
       }
 
-      // 1. SuperAdmin bypass
-      if (user.roleId === 3) {
+      // 1. SuperAdmin bypass (Role ID 1 is Admin in .NET C# spec)
+      if (user.roleId === 1) {
         return next();
       }
 

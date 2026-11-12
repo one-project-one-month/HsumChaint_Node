@@ -39,7 +39,7 @@ export interface FormattedRole {
 }
 
 export const isSystemAdmin = (role: { id: number; name: string }): boolean => {
-  return role.id === 3;
+  return role.id === 1 || role.name?.toLowerCase() === 'admin';
 };
 
 const stripsAdminPermissions = async (desiredIds: number[]): Promise<boolean> => {

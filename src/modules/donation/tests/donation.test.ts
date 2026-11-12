@@ -76,7 +76,7 @@ describe('C# donation contracts', () => {
   });
   test('revoking global create permission blocks an unaffiliated donor', async () => {
     const f = donationFixture(false);
-    f.tables.rolePermission = f.tables.rolePermission.filter((row) => row.roleId !== 2);
+    f.tables.rolePermission = f.tables.rolePermission.filter((row) => row.roleId !== 3);
     await expect(f.service.request(2, 10, input)).rejects.toMatchObject({ statusCode: 403 });
   });
   test('custom review and scheduling permissions are independent and scoped', async () => {
@@ -452,7 +452,7 @@ describe('C# compatible and space-scoped HTTP routes', () => {
     app.use((req, res, next) => {
       const userId = Number(req.headers['x-test-user']);
       if (!userId) return res.sendStatus(401);
-      req.user = { userId, roleId: 2 };
+      req.user = { userId, roleId: 3 };
       next();
     });
     app.use('/api/v1/donations', createDonationRouter(f.service));
@@ -614,7 +614,7 @@ describe('C# compatible and space-scoped HTTP routes', () => {
     f.donation();
     f.tables.rolePermission = f.tables.rolePermission.filter(
       (row) =>
-        !(row.roleId === 2 && (row.permission as Record<string, unknown>).name === 'Donation.View')
+        !(row.roleId === 3 && (row.permission as Record<string, unknown>).name === 'Donation.View')
     );
     for (const path of [
       '/api/v1/donations/100',
@@ -636,7 +636,7 @@ describe('C# compatible and space-scoped HTTP routes', () => {
     f.tables.rolePermission = f.tables.rolePermission.filter(
       (row) =>
         !(
-          row.roleId === 2 && (row.permission as Record<string, unknown>).name === 'Donation.Create'
+          row.roleId === 3 && (row.permission as Record<string, unknown>).name === 'Donation.Create'
         )
     );
     for (const [path, payload] of [
@@ -664,7 +664,7 @@ describe('C# compatible and space-scoped HTTP routes', () => {
     f.tables.rolePermission = f.tables.rolePermission.filter(
       (row) =>
         !(
-          row.roleId === 2 && (row.permission as Record<string, unknown>).name === 'Donation.Cancel'
+          row.roleId === 3 && (row.permission as Record<string, unknown>).name === 'Donation.Cancel'
         )
     );
     expect(

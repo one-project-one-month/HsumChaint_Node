@@ -80,6 +80,8 @@ describe('updateUserService Unit Test (Mocking)', () => {
     avatar: null,
     fcmToken: null, // FIX: Added fcmToken because it's required in schema
     isDeleted: false,
+    phoneVerifiedAt: null,
+    emailVerifiedAt: null,
     createdAt: new Date(),
     updatedAt: new Date(),
     monkProfile: {
