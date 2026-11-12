@@ -265,15 +265,15 @@ export const createMonasteryService = async (
 };
 
 /**
- * Helper to check if a user is a System Admin (role ID 3 or role named 'Admin')
+ * Helper to check if a user is a System Admin (role ID 1 or role named 'Admin')
  */
 export const checkIsAdmin = async (userId: number, roleId?: number): Promise<boolean> => {
-  if (roleId === 3) return true;
+  if (roleId === 1) return true;
   if (roleId) {
     const role = await prisma.role.findFirst({
       where: { id: roleId, isDeleted: false },
     });
-    if (role && (role.id === 3 || role.name.toLowerCase() === 'admin')) {
+    if (role && (role.id === 1 || role.name.toLowerCase() === 'admin')) {
       return true;
     }
   }

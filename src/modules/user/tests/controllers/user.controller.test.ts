@@ -27,7 +27,7 @@ const FAKE_USER = {
   email: 'controller@test.com',
   phone: '09111111111',
   contactPhone: '09111111111',
-  roleId: 1,
+  roleId: 2,
   isDeleted: false,
   createdAt: new Date('2026-11-01T08:00:00Z'),
   monkProfile: {
@@ -126,7 +126,7 @@ describe('UserController Unit Test (Mocking & Direct Execution)', () => {
     ) as unknown as typeof prisma.user.findFirst;
 
     const req = {
-      user: { userId: FAKE_USER_ID, roleId: 1 },
+      user: { userId: FAKE_USER_ID, roleId: 2 },
     } as unknown as Request;
     const res = createMockRes();
     const next = mock();
@@ -148,7 +148,7 @@ describe('UserController Unit Test (Mocking & Direct Execution)', () => {
 
     const req = {
       params: { id: String(FAKE_USER_ID) },
-      user: { userId: FAKE_USER_ID, roleId: 1 },
+      user: { userId: FAKE_USER_ID, roleId: 2 },
     } as unknown as Request;
     const res = createMockRes();
     const next = mock();
@@ -167,7 +167,7 @@ describe('UserController Unit Test (Mocking & Direct Execution)', () => {
 
     const req = {
       query: { pageNumber: 1, pageSize: 10 },
-      user: { userId: 1, roleId: 3 },
+      user: { userId: 1, roleId: 1 },
     } as unknown as Request;
     const res = createMockRes();
     const next = mock();
@@ -194,7 +194,7 @@ describe('UserController Unit Test (Mocking & Direct Execution)', () => {
     const req = {
       params: {},
       body: { id: FAKE_USER_ID, name: 'Updated Name' },
-      user: { userId: FAKE_USER_ID, roleId: 1 },
+      user: { userId: FAKE_USER_ID, roleId: 2 },
     } as unknown as Request;
     const res = createMockRes();
     const next = mock();
@@ -217,7 +217,7 @@ describe('UserController Unit Test (Mocking & Direct Execution)', () => {
 
     const req = {
       params: { id: String(FAKE_USER_ID) },
-      user: { userId: 1, roleId: 3 },
+      user: { userId: 1, roleId: 1 },
     } as unknown as Request;
     const res = createMockRes();
     const next = mock();
@@ -237,7 +237,7 @@ describe('UserController Unit Test (Mocking & Direct Execution)', () => {
 
     const req = {
       params: { id: String(FAKE_USER_ID) },
-      user: { userId: FAKE_USER_ID, roleId: 1 },
+      user: { userId: FAKE_USER_ID, roleId: 2 },
     } as unknown as Request;
     const res = createMockRes();
     const next = mock();
@@ -267,7 +267,7 @@ describe('UserController Unit Test (Mocking & Direct Execution)', () => {
         monasteryName: 'Updated Campus',
         monasteryAddress: 'Updated Campus Address',
       },
-      user: { userId: FAKE_USER_ID, roleId: 1 },
+      user: { userId: FAKE_USER_ID, roleId: 2 },
     } as unknown as Request;
     const res = createMockRes();
     const next = mock();
@@ -291,7 +291,7 @@ describe('UserController Unit Test (Mocking & Direct Execution)', () => {
 
     const req = {
       params: { id: String(FAKE_USER_ID) },
-      user: { userId: FAKE_USER_ID, roleId: 1 },
+      user: { userId: FAKE_USER_ID, roleId: 2 },
     } as unknown as Request;
     const res = createMockRes();
     const next = mock();
@@ -314,7 +314,7 @@ describe('UserController Unit Test (Mocking & Direct Execution)', () => {
     const req = {
       params: { id: String(FAKE_USER_ID) },
       query: { pageNumber: 1, pageSize: 10 },
-      user: { userId: FAKE_USER_ID, roleId: 1 },
+      user: { userId: FAKE_USER_ID, roleId: 2 },
     } as unknown as Request;
     const res = createMockRes();
     const next = mock();
@@ -334,7 +334,7 @@ describe('UserController Unit Test (Mocking & Direct Execution)', () => {
     const req = {
       params: { id: String(FAKE_USER_ID) },
       query: { pageSize: 15 },
-      user: { userId: FAKE_USER_ID, roleId: 1 },
+      user: { userId: FAKE_USER_ID, roleId: 2 },
     } as unknown as Request;
     const res = createMockRes();
     const next = mock();
@@ -357,7 +357,7 @@ describe('UserController Unit Test (Mocking & Direct Execution)', () => {
     const req = {
       params: { id: String(FAKE_USER_ID) },
       query: { pageNumber: 1, pageSize: 10 },
-      user: { userId: FAKE_USER_ID, roleId: 1 },
+      user: { userId: FAKE_USER_ID, roleId: 2 },
     } as unknown as Request;
     const res = createMockRes();
     const next = mock();
@@ -377,7 +377,7 @@ describe('UserController Unit Test (Mocking & Direct Execution)', () => {
     const req = {
       params: { id: String(FAKE_USER_ID) },
       query: { pageSize: 15 },
-      user: { userId: FAKE_USER_ID, roleId: 1 },
+      user: { userId: FAKE_USER_ID, roleId: 2 },
     } as unknown as Request;
     const res = createMockRes();
     const next = mock();
@@ -396,7 +396,7 @@ describe('UserController Unit Test (Mocking & Direct Execution)', () => {
 
     const req = {
       params: { id: String(FAKE_USER_ID) },
-      user: { userId: FAKE_USER_ID, roleId: 1 },
+      user: { userId: FAKE_USER_ID, roleId: 2 },
     } as unknown as Request;
     const res = createMockRes();
     const next = mock();
@@ -418,7 +418,7 @@ describe('UserController Unit Test (Mocking & Direct Execution)', () => {
 
     const req = {
       params: { id: String(FAKE_USER_ID) },
-      user: { userId: FAKE_USER_ID, roleId: 1 },
+      user: { userId: FAKE_USER_ID, roleId: 2 },
     } as unknown as Request;
     const res = createMockRes();
     const next = mock();
@@ -449,7 +449,7 @@ describe('UserController Unit Test (Mocking & Direct Execution)', () => {
         pickupNotificationTime: '2026-11-01T14:00:00Z',
         dropoffNotificationTime: '2026-11-01T21:00:00Z',
       },
-      user: { userId: FAKE_USER_ID, roleId: 1 },
+      user: { userId: FAKE_USER_ID, roleId: 2 },
     } as unknown as Request;
     const res = createMockRes();
     const next = mock();

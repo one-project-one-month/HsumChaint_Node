@@ -4,40 +4,39 @@ import {
   loginSchema,
   refreshTokenSchema,
   registerSchema,
-} from './auth.schema';
+} from '../auth.schema';
 
-describe('public registration roles (current system state: 1=Monk, 2=Donor, 3=Admin)', () => {
-  const body = { name: 'Test User', phone: '09123456789', password: 'Password123!' };
+describe('public registration roles (.NET C# spec: 1=Admin, 2=Monk, 3=Donor)', () => {
+  const body = { name: 'Test User', phoneNumber: '09123456789', password: 'Password123!' };
 
-  it('accepts donors (roleId: 2)', () => {
-    expect(registerSchema.safeParse({ body: { ...body, roleId: 2 } }).success).toBe(true);
+  it('accepts donors (roleId: 3)', () => {
+    expect(registerSchema.safeParse({ body: { ...body, roleId: 3 } }).success).toBe(true);
   });
 
-  it('accepts monks with monastery information (roleId: 1)', () => {
-    const result = registerSchema.safeParse({
-      body: {
-        name: 'U Thuzana',
-        phoneNumber: '09100000001',
-        password: 'Password123!',
-        roleId: 1,
-        monasteryName: 'Mahasi Yeiktha',
-        monasteryAddress: 'Bahan, Yangon',
-        contactPhoneNumber: '09100000001',
-      },
-    });
+  it('accepts monks with monastery information (roleId: 2)', () => {
+    const monkPayload = {
+      name: 'U Thuzana',
+      phoneNumber: '09100000001',
+      password: 'Password123!',
+      roleId: 2,
+      monasteryName: 'Mahasi Yeiktha',
+      monasteryAddress: 'Bahan, Yangon',
+      contactPhoneNumber: '09100000001',
+    };
+    const result = registerSchema.safeParse({ body: monkPayload });
     expect(result.success).toBe(true);
     if (result.success) {
-      expect(result.data.body.phone).toBe('09100000001');
-      expect(result.data.body.contactPhone).toBe('09100000001');
+      expect(result.data.body.phoneNumber).toBe('09100000001');
+      expect(result.data.body.contactPhoneNumber).toBe('09100000001');
     }
   });
 
-  it('rejects monk with roleId: 1 missing monastery information', () => {
-    expect(registerSchema.safeParse({ body: { ...body, roleId: 1 } }).success).toBe(false);
+  it('rejects monk with roleId: 2 missing monastery information', () => {
+    expect(registerSchema.safeParse({ body: { ...body, roleId: 2 } }).success).toBe(false);
   });
 
-  it('rejects arbitrary, non-integer, and admin role IDs (roleId: 3)', () => {
-    for (const roleId of [0, 3, 4, -1, 1.5, 99]) {
+  it('rejects arbitrary, non-integer, and admin role IDs (roleId: 1)', () => {
+    for (const roleId of [0, 1, 4, -1, 1.5, 99]) {
       expect(registerSchema.safeParse({ body: { ...body, roleId } }).success).toBe(false);
     }
   });
@@ -48,7 +47,7 @@ describe('public registration roles (current system state: 1=Monk, 2=Donor, 3=Ad
     });
     expect(parsed.success).toBe(true);
     if (parsed.success) {
-      expect(parsed.data.body.phone).toBe('09123456789');
+      expect(parsed.data.body.phoneNumber).toBe('09123456789');
     }
   });
 
@@ -70,7 +69,7 @@ describe('public registration roles (current system state: 1=Monk, 2=Donor, 3=Ad
     });
     expect(parsed.success).toBe(true);
     if (parsed.success) {
-      expect(parsed.data.body.phone).toBe('09123456789');
+      expect(parsed.data.body.phoneNumber).toBe('09123456789');
     }
   });
 });

@@ -115,10 +115,10 @@ mock.module('@/lib/prisma', () => ({
   prisma: {
     user: {
       findFirst: mock(async ({ where }: MockFindFirstArgs = {}) => {
-        if (where?.roleId !== undefined && where.roleId !== 3) {
+        if (where?.roleId !== undefined && where.roleId !== 1) {
           return null;
         }
-        return { id: 1, roleId: 3, isDeleted: false };
+        return { id: 1, roleId: 1, isDeleted: false };
       }),
     },
     monasteryMember: {
@@ -390,12 +390,12 @@ describe('Dynamic RBAC & System Permissions (/api/v1/roles, /api/v1/permissions)
   let adminToken: string;
 
   beforeEach(() => {
-    adminToken = generateAccessToken({ userId: 1, roleId: 3 });
+    adminToken = generateAccessToken({ userId: 1, roleId: 1 });
 
     mockRoles = [
-      { id: 1, name: 'Monk', isDeleted: false },
-      { id: 2, name: 'Donor', isDeleted: false },
-      { id: 3, name: 'Admin', isDeleted: false },
+      { id: 1, name: 'Admin', isDeleted: false },
+      { id: 2, name: 'Monk', isDeleted: false },
+      { id: 3, name: 'Donor', isDeleted: false },
     ];
 
     mockPermissions = [
@@ -452,12 +452,12 @@ describe('Dynamic RBAC & System Permissions (/api/v1/roles, /api/v1/permissions)
   // 45. Get System Role by ID
   it('45. GET /api/v1/roles/:id - returns role metadata and permissionKeys', async () => {
     const res = await request(app)
-      .get('/api/v1/roles/1')
+      .get('/api/v1/roles/2')
       .set('Authorization', `Bearer ${adminToken}`);
 
     expect(res.status).toBe(200);
     expect(res.body.isSuccess).toBe(true);
-    expect(res.body.data.id).toBe(1);
+    expect(res.body.data.id).toBe(2);
     expect(res.body.data.name).toBe('Monk');
     expect(res.body.data.permissionKeys).toBeArray();
   });
@@ -480,9 +480,9 @@ describe('Dynamic RBAC & System Permissions (/api/v1/roles, /api/v1/permissions)
 
   // 47. Update System Role
   it('47. PUT /api/v1/roles/:id - updates custom role and protects Admin role', async () => {
-    // Should reject updating Admin role
+    // Should reject updating Admin role (Role ID 1 in .NET C# spec)
     const adminRes = await request(app)
-      .put('/api/v1/roles/3')
+      .put('/api/v1/roles/1')
       .set('Authorization', `Bearer ${adminToken}`)
       .send({
         name: 'Super Admin',
@@ -506,7 +506,7 @@ describe('Dynamic RBAC & System Permissions (/api/v1/roles, /api/v1/permissions)
   // 48. Delete System Role
   it('48. DELETE /api/v1/roles/:id - soft-deletes custom role and protects Admin role', async () => {
     const adminDeleteRes = await request(app)
-      .delete('/api/v1/roles/3')
+      .delete('/api/v1/roles/1')
       .set('Authorization', `Bearer ${adminToken}`);
     expect(adminDeleteRes.status).toBe(400);
 
@@ -552,7 +552,7 @@ describe('Dynamic Space RBAC & Space Permissions (/api/v1/space-roles, /api/v1/s
   let adminToken: string;
 
   beforeEach(() => {
-    adminToken = generateAccessToken({ userId: 1, roleId: 3 });
+    adminToken = generateAccessToken({ userId: 1, roleId: 1 });
 
     mockSpaceRoles = [
       { id: 1, name: 'Owner', description: 'Monk creator', isDeleted: false },
@@ -705,7 +705,7 @@ describe('RBAC compatibility and role boundaries', () => {
   it('keeps the documented permission-catalog alias', async () => {
     const res = await request(app)
       .get('/api/v1/roles/permissions')
-      .set('Authorization', `Bearer ${generateAccessToken({ userId: 1, roleId: 3 })}`);
+      .set('Authorization', `Bearer ${generateAccessToken({ userId: 1, roleId: 1 })}`);
     expect(res.status).toBe(200);
     expect(res.body.data).toBeArray();
   });
@@ -713,9 +713,9 @@ describe('RBAC compatibility and role boundaries', () => {
   it('does not treat Monk or Donor roles as administrators', async () => {
     const { isSystemAdminRoleId } = await import('@/middlewares/permissionMiddleware');
     const { isSystemAdmin } = await import('../role.service');
-    for (const roleId of [1, 2]) {
+    for (const roleId of [2, 3]) {
       expect(isSystemAdminRoleId(roleId)).toBe(false);
-      expect(isSystemAdmin({ id: roleId, name: roleId === 1 ? 'Monk' : 'Donor' })).toBe(false);
+      expect(isSystemAdmin({ id: roleId, name: roleId === 2 ? 'Monk' : 'Donor' })).toBe(false);
       mockRolePermissions = [];
       const res = await request(app)
         .post('/api/v1/roles')
@@ -723,8 +723,8 @@ describe('RBAC compatibility and role boundaries', () => {
         .send({ name: 'Unauthorized role' });
       expect(res.status).toBe(403);
     }
-    expect(isSystemAdminRoleId(3)).toBe(true);
-    expect(isSystemAdmin({ id: 3, name: 'Admin' })).toBe(true);
+    expect(isSystemAdminRoleId(1)).toBe(true);
+    expect(isSystemAdmin({ id: 1, name: 'Admin' })).toBe(true);
   });
 });
 

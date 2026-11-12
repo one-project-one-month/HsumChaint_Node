@@ -165,7 +165,7 @@ describe('Space RBAC & requireSpacePermission Middleware', () => {
     it('rejects with 400 if space ID cannot be resolved', async () => {
       const mw = requireSpacePermission('Space.View');
       const err = await executeMiddleware(mw, {
-        user: { userId: 5, roleId: 1 },
+        user: { userId: 5, roleId: 2 },
         params: {},
         query: {},
         body: {},
@@ -174,10 +174,10 @@ describe('Space RBAC & requireSpacePermission Middleware', () => {
       expect((err as AppError).statusCode).toBe(400);
     });
 
-    it('allows SuperAdmin (roleId 3) directly without checking monastery membership', async () => {
+    it('allows SuperAdmin (roleId 1) directly without checking monastery membership', async () => {
       const mw = requireSpacePermission('Space.Delete');
       const err = await executeMiddleware(mw, {
-        user: { userId: 99, roleId: 3 },
+        user: { userId: 99, roleId: 1 },
         params: { id: '9' },
       });
       expect(err).toBeUndefined();

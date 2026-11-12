@@ -23,6 +23,18 @@ const envSchema = z.object({
   R2_BUCKET_NAME: z.string(),
   R2_ENDPOINT: z.string(),
   R2_PUBLIC_URL: z.string(),
+  SMTP_HOST: z.string().trim().optional(),
+  SMTP_PORT: z.preprocess(
+    (val) => (val === '' ? undefined : val),
+    z.coerce.number().int().positive().default(587)
+  ),
+  SMTP_SECURE: z
+    .string()
+    .optional()
+    .transform((val) => val?.trim().toLowerCase() === 'true'),
+  SMTP_USER: z.string().trim().optional(),
+  SMTP_PASS: z.string().optional(),
+  SMTP_FROM: z.string().trim().optional(),
 });
 
 const parsed = envSchema.safeParse(process.env);

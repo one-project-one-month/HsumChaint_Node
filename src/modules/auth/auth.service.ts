@@ -9,78 +9,191 @@ import { clearUserListCache } from '@/utils/cache.util';
 import type { TokenPayload } from '@/utils/jwt';
 import { prisma } from '../../lib/prisma';
 import { AppError } from '../../utils/AppError';
-import type { LoginInput, RegisterInput, resetPasswordInput } from './auth.schema';
+import type {
+  ChangePasswordInput,
+  ForgotPasswordInput,
+  LoginInput,
+  RegisterInput,
+  RequestRegistrationOtpInput,
+  ResetPasswordInput,
+} from './auth.schema';
+import { OtpChannel, OtpPurpose, requestOtpService, verifyOtpService } from './otp.service';
 
-// register
+// 1.1 Request Registration OTP
+export const requestRegistrationOtpService = async (data: RequestRegistrationOtpInput) => {
+  const destination = data.destination;
+  const existing = await prisma.user.findFirst({
+    where: {
+      email: destination,
+      isDeleted: false,
+      emailVerifiedAt: { not: null },
+    },
+  });
+  if (existing) {
+    throw new AppError('A user with this identifier already exists.', 400);
+  }
+  return await requestOtpService({
+    destination,
+    channel: OtpChannel.EMAIL,
+    purpose: OtpPurpose.VERIFY_EMAIL,
+  });
+};
+
+// 1. Register User (with Atomic Verification & Auto-Login)
 export const registerUser = async (data: RegisterInput) => {
-  // Reject registering as protected role (e.g. Admin, roleId: 3)
-  if (data.roleId === 3) {
+  // Reject registering as protected role (Admin, roleId: 1)
+  if (data.roleId === 1) {
     throw new AppError('Forbidden', 403);
   }
 
-  // Reject donor attempting to add monastery details
+  // Reject donor attempting to add monastery details (roleId: 3)
   if (
-    data.roleId === 2 &&
+    data.roleId === 3 &&
     ((data.monasteryName && data.monasteryName.trim() !== '') ||
       (data.monasteryAddress && data.monasteryAddress.trim() !== ''))
   ) {
     throw new AppError('Donors cannot have monastery name or monastery address', 400);
   }
 
-  const phone = data.phone;
-  const conditions: Prisma.UserWhereInput[] = [{ phone }];
-  if (data.email) {
-    conditions.push({ email: data.email });
+  // Role ID 2 is Monk
+  if (data.roleId === 2 && (!data.monasteryName || !data.monasteryAddress)) {
+    throw new AppError('Monastery name and address are required for Monk users', 400);
   }
-  const existingUser = await prisma.user.findFirst({
-    where: {
-      OR: conditions,
-      isDeleted: false,
-    },
+
+  const phone = data.phoneNumber;
+  const contactPhone = data.contactPhoneNumber;
+  const email = data.email;
+
+  // Active Login Mode checks
+  const activeMode = await prisma.loginMode?.findFirst({
+    where: { isActive: true },
   });
-  if (existingUser) {
-    throw new AppError('Phone number already exists.', 400);
+
+  if (activeMode?.code === 'PHONE_ONLY' && !phone) {
+    throw new AppError('Phone number is required for phone-only registration.', 400);
   }
-  if (data.contactPhone) {
-    const existingContactPhone = await prisma.user.findFirst({
-      where: { contactPhone: data.contactPhone },
+  if (activeMode?.code === 'EMAIL_ONLY' && !email) {
+    throw new AppError('Email is required for email-only registration.', 400);
+  }
+  if (activeMode?.code === 'PHONE_OR_EMAIL' && !phone && !email) {
+    throw new AppError('Either phone number or email is required.', 400);
+  }
+
+  // Atomic OTP verification if requireEmailVerification is active or OTP was supplied
+  let isEmailVerified = false;
+  if (email && (data.otp || activeMode?.requireEmailVerification)) {
+    if (!data.otp) {
+      throw new AppError('Invalid or expired OTP.', 400);
+    }
+    await verifyOtpService({
+      destination: email,
+      channel: OtpChannel.EMAIL,
+      purpose: OtpPurpose.VERIFY_EMAIL,
+      code: data.otp,
     });
-    if (existingContactPhone) {
+    isEmailVerified = true;
+  }
+
+  // Check existing users
+  let abandonedUser: { id: number; emailVerifiedAt: Date | null } | null = null;
+  if (email) {
+    const existingWithEmail = await prisma.user.findFirst({
+      where: { email, isDeleted: false },
+    });
+    if (existingWithEmail) {
+      if (existingWithEmail.emailVerifiedAt !== null) {
+        throw new AppError('A user with this identifier already exists.', 400);
+      }
+      // Abandoned registration recovery case
+      abandonedUser = existingWithEmail;
+    }
+  }
+
+  if (phone) {
+    const existingWithPhone = await prisma.user.findFirst({
+      where: { phone, isDeleted: false },
+    });
+    if (existingWithPhone && existingWithPhone.id !== abandonedUser?.id) {
+      throw new AppError('Phone number already exists.', 400);
+    }
+  }
+
+  if (contactPhone) {
+    const existingContactPhone = await prisma.user.findFirst({
+      where: { contactPhone },
+    });
+    if (existingContactPhone && existingContactPhone.id !== abandonedUser?.id) {
       throw new AppError('Contact phone already used', 400);
     }
   }
 
-  // Role ID 1 is Monk in current system state
-  if (data.roleId === 1 && (!data.monasteryName || !data.monasteryAddress)) {
-    throw new AppError('Monastery name and address are required for Monk users', 400);
-  }
-
   const hashedPassword = await Bun.password.hash(data.password);
+  const emailVerifiedAt = isEmailVerified ? new Date() : (abandonedUser?.emailVerifiedAt ?? null);
+
+  type SelectedUser = {
+    id: number;
+    phone: string | null;
+    name: string;
+    email: string | null;
+    roleId: number;
+    createdAt: Date;
+    contactPhone: string | null;
+    avatar: string | null;
+  };
+
   const result = await prisma.$transaction(async (tx) => {
-    const user = await tx.user.create({
-      data: {
-        phone,
-        name: data.name,
-        email: data.email,
-        password: hashedPassword,
-        roleId: data.roleId,
-        contactPhone: data.contactPhone,
-        avatar: data.avatar,
-      },
-      select: {
-        id: true,
-        phone: true,
-        name: true,
-        email: true,
-        roleId: true,
-        createdAt: true,
-        contactPhone: true,
-        avatar: true,
-      },
-    });
+    let user: SelectedUser;
+    if (abandonedUser) {
+      user = await tx.user.update({
+        where: { id: abandonedUser.id },
+        data: {
+          phone,
+          name: data.name,
+          email,
+          password: hashedPassword,
+          roleId: data.roleId,
+          contactPhone: contactPhone ?? null,
+          avatar: data.avatar,
+          emailVerifiedAt,
+        },
+        select: {
+          id: true,
+          phone: true,
+          name: true,
+          email: true,
+          roleId: true,
+          createdAt: true,
+          contactPhone: true,
+          avatar: true,
+        },
+      });
+    } else {
+      user = await tx.user.create({
+        data: {
+          phone,
+          name: data.name,
+          email,
+          password: hashedPassword,
+          roleId: data.roleId,
+          contactPhone: contactPhone ?? null,
+          avatar: data.avatar,
+          emailVerifiedAt,
+        },
+        select: {
+          id: true,
+          phone: true,
+          name: true,
+          email: true,
+          roleId: true,
+          createdAt: true,
+          contactPhone: true,
+          avatar: true,
+        },
+      });
+    }
 
     let monkProfile = null;
-    if (data.roleId === 1 && data.monasteryName && data.monasteryAddress) {
+    if (data.roleId === 2 && data.monasteryName && data.monasteryAddress) {
       monkProfile = await tx.monkProfile.create({
         data: {
           userId: user.id,
@@ -99,12 +212,12 @@ export const registerUser = async (data: RegisterInput) => {
     where: { id: result.user.roleId },
     select: { id: true, name: true },
   });
-  const roleName = role?.name || (result.user.roleId === 1 ? 'Monk' : 'Donor');
+  const roleName = role?.name || (result.user.roleId === 2 ? 'Monk' : 'Donor');
 
   // Warm the /me cache immediately after register
   const profileData = {
     ...result.user,
-    monkProfile: result.user.roleId === 1 ? result.monkProfile : null,
+    monkProfile: result.user.roleId === 2 ? result.monkProfile : null,
   };
   try {
     await redis.set(`user:${result.user.id}:profile`, JSON.stringify(profileData), 'EX', 3600);
@@ -115,40 +228,63 @@ export const registerUser = async (data: RegisterInput) => {
 
   return {
     id: result.user.id,
-    userId: result.user.id,
-    name: result.user.name,
-    phoneNumber: result.user.phone,
-    phone: result.user.phone,
     roleId: result.user.roleId,
     roleName,
     accessToken: result.accessToken,
     refreshToken: result.refreshToken,
-    token: result.accessToken,
     permissions,
-    user: profileData,
-    monkProfile: result.monkProfile,
   };
 };
 
-// login
+// 2. Login User
 export const loginUser = async (data: LoginInput) => {
-  const phone = data.phone;
-  const user = await prisma.user.findUnique({
-    where: { phone, isDeleted: false },
-    include: { monkProfile: true, role: true },
+  const identifier = data.identifier || data.phoneNumber || '';
+  if (!identifier) {
+    throw new AppError('Phone number or password incorrect!', 400);
+  }
+
+  const isEmail = identifier.includes('@');
+
+  // Check Active Login Mode
+  const activeMode = await prisma.loginMode?.findFirst({
+    where: { isActive: true },
   });
+
+  if (activeMode?.code === 'PHONE_ONLY' && isEmail) {
+    throw new AppError('Active login mode does not permit email login.', 400);
+  }
+  if (activeMode?.code === 'EMAIL_ONLY' && !isEmail) {
+    throw new AppError('Active login mode does not permit phone login.', 400);
+  }
+
+  const user = isEmail
+    ? await prisma.user.findUnique({
+        where: { email_isDeleted: { email: identifier.toLowerCase(), isDeleted: false } },
+        include: { monkProfile: true, role: true },
+      })
+    : await prisma.user.findUnique({
+        where: { phone_isDeleted: { phone: identifier, isDeleted: false } },
+        include: { monkProfile: true, role: true },
+      });
+
   if (!user) {
     throw new AppError('Phone number or password incorrect!', 400);
   }
+
   const isPasswordMatch = await Bun.password.verify(data.password, user.password);
   if (!isPasswordMatch) {
     throw new AppError('Phone number or password incorrect!', 400);
   }
 
+  // Verification requirement check
+  if (activeMode?.requireEmailVerification && isEmail && !user.emailVerifiedAt) {
+    throw new AppError('Identifier verification is required.', 400);
+  }
+
   const { accessToken, refreshToken } = await createAuthSession(prisma, user.id, user.roleId);
   const permissions = await getRolePermissions(user.roleId);
   const roleName =
-    user.role?.name || (user.roleId === 1 ? 'Monk' : user.roleId === 2 ? 'Donor' : 'Admin');
+    user.role?.name || (user.roleId === 1 ? 'Admin' : user.roleId === 2 ? 'Monk' : 'Donor');
 
   // Warm the /me cache so the first authenticated request is free
   const profileCacheKey = `user:${user.id}:profile`;
@@ -181,7 +317,7 @@ export const loginUser = async (data: LoginInput) => {
   };
 };
 
-// refresh token
+// 3. Refresh Token
 export const refreshTokenService = async (refreshToken: string, expectedUserId?: number) => {
   let payload: TokenPayload;
   try {
@@ -229,7 +365,7 @@ export const refreshTokenService = async (refreshToken: string, expectedUserId?:
 
     const permissions = await getRolePermissions(user.roleId);
     const roleName =
-      user.role?.name || (user.roleId === 1 ? 'Monk' : user.roleId === 2 ? 'Donor' : 'Admin');
+      user.role?.name || (user.roleId === 1 ? 'Admin' : user.roleId === 2 ? 'Monk' : 'Donor');
 
     // Exact .NET response contract
     return {
@@ -243,7 +379,7 @@ export const refreshTokenService = async (refreshToken: string, expectedUserId?:
   });
 };
 
-// logout
+// Logout
 export const logoutUser = async (refreshToken: string) => {
   let payload: TokenPayload;
   try {
@@ -275,23 +411,59 @@ export const logoutUser = async (refreshToken: string) => {
   return { message: 'Logged out successfully.' };
 };
 
-// login mode
+// 2.1 Get Active Login Mode Configuration
 export const getLoginModeService = async () => {
+  const mode = await prisma.loginMode?.findFirst({
+    where: { isActive: true },
+  });
   return {
-    code: 'phone_or_email',
-    requirePhoneVerification: false,
-    requireEmailVerification: true,
+    code: mode?.code ?? 'phone_or_email',
+    requirePhoneVerification: mode?.requirePhoneVerification ?? false,
+    requireEmailVerification: mode?.requireEmailVerification ?? true,
   };
 };
 
-// forgot password handle
-export const forgotPasswordService = async (phone: string) => {
-  const user = await prisma.user.findUnique({
-    where: { phone },
+// 3.1 Forgot Password (Request Reset OTP)
+export const forgotPasswordService = async (data: ForgotPasswordInput) => {
+  const trimmed = (data.destination || data.phoneNumber || '').trim();
+  if (!trimmed) {
+    throw new AppError('Destination or phone number is required', 400);
+  }
+  const isEmail = trimmed.includes('@');
+
+  const conditions: Prisma.UserWhereInput[] = [];
+  if (isEmail) {
+    conditions.push({ email: trimmed.toLowerCase() });
+  } else {
+    conditions.push({ phone: trimmed });
+  }
+
+  const user = await prisma.user.findFirst({
+    where: {
+      OR: conditions,
+      isDeleted: false,
+    },
   });
+
   if (!user) {
     throw new AppError('User not found', 404);
   }
+
+  if (user.email) {
+    const otpResult = await requestOtpService({
+      destination: user.email,
+      channel: OtpChannel.EMAIL,
+      purpose: OtpPurpose.RESET_PASSWORD,
+      userId: user.id,
+    });
+    return {
+      expiresAt: otpResult.expiresAt,
+      resendCooldownSeconds: otpResult.resendCooldownSeconds,
+      otp: otpResult.otp,
+    };
+  }
+
+  // Legacy fallback if user has no email
   const rawResetToken = crypto.randomBytes(32).toString('hex');
   const hashResetToken = crypto.createHash('sha256').update(rawResetToken).digest('hex');
   await prisma.passwordResetToken.create({
@@ -304,29 +476,134 @@ export const forgotPasswordService = async (phone: string) => {
   return { resetToken: rawResetToken, rawResetToken };
 };
 
-// reset password handle
-export const resetPasswordService = async (result: resetPasswordInput) => {
-  const hashedToken = crypto.createHash('sha256').update(result.resetToken).digest('hex');
-  const resetToken = await prisma.passwordResetToken.findUnique({
-    where: { resetToken: hashedToken },
-  });
-  if (!resetToken || resetToken.expiresAt < new Date()) {
-    throw new AppError('Invalid or expired token', 400);
+// 3.2 Reset Password
+export const resetPasswordService = async (data: ResetPasswordInput) => {
+  if (data.email && data.otp && data.newPassword) {
+    await verifyOtpService({
+      destination: data.email,
+      channel: OtpChannel.EMAIL,
+      purpose: OtpPurpose.RESET_PASSWORD,
+      code: data.otp,
+    });
+
+    const user = await prisma.user.findFirst({
+      where: { email: data.email.toLowerCase(), isDeleted: false },
+    });
+    if (!user) {
+      throw new AppError('User not found', 404);
+    }
+
+    const hashedPassword = await Bun.password.hash(data.newPassword);
+    await prisma.$transaction([
+      prisma.user.update({
+        where: { id: user.id },
+        data: { password: hashedPassword },
+      }),
+      prisma.refreshToken.updateMany({
+        where: { userId: user.id, revokedAt: null },
+        data: { revokedAt: new Date() },
+      }),
+    ]);
+
+    try {
+      await redis.del(`user:${user.id}:profile`);
+    } catch (error) {
+      console.error('Redis Del Reset Cache Error:', error);
+    }
+    return;
   }
-  const hashedPassword = await Bun.password.hash(result.password);
+
+  if (data.resetToken && data.password) {
+    const hashedToken = crypto.createHash('sha256').update(data.resetToken).digest('hex');
+    const resetToken = await prisma.passwordResetToken.findUnique({
+      where: { resetToken: hashedToken },
+    });
+    if (!resetToken || resetToken.expiresAt < new Date()) {
+      throw new AppError('Invalid or expired token', 400);
+    }
+    const hashedPassword = await Bun.password.hash(data.password);
+    await prisma.$transaction([
+      prisma.user.update({
+        where: { id: resetToken.userId },
+        data: { password: hashedPassword },
+      }),
+      prisma.passwordResetToken.delete({
+        where: { id: resetToken.id },
+      }),
+    ]);
+
+    try {
+      await redis.del(`user:${resetToken.userId}:profile`);
+    } catch (error) {
+      console.error('Redis Del Reset Cache Error:', error);
+    }
+  }
+};
+
+// 3.3 Request Change Password OTP
+export const requestChangePasswordOtpService = async (userId: number) => {
+  const user = await prisma.user.findFirst({
+    where: { id: userId, isDeleted: false },
+  });
+  if (!user) {
+    throw new AppError('User not found', 404);
+  }
+  if (!user.email) {
+    throw new AppError('User has no registered email', 400);
+  }
+
+  return await requestOtpService({
+    destination: user.email,
+    channel: OtpChannel.EMAIL,
+    purpose: OtpPurpose.CHANGE_PASSWORD,
+    userId: user.id,
+  });
+};
+
+// 3.4 Change Password
+export const changePasswordService = async (userId: number, data: ChangePasswordInput) => {
+  const user = await prisma.user.findFirst({
+    where: { id: userId, isDeleted: false },
+  });
+  if (!user) {
+    throw new AppError('User not found', 404);
+  }
+
+  const isMatch = await Bun.password.verify(data.currentPassword, user.password);
+  if (!isMatch) {
+    throw new AppError('Current password incorrect', 400);
+  }
+
+  if (data.currentPassword === data.newPassword) {
+    throw new AppError('New password cannot be the same as current password', 400);
+  }
+
+  if (!user.email) {
+    throw new AppError('User has no registered email', 400);
+  }
+
+  await verifyOtpService({
+    destination: user.email,
+    channel: OtpChannel.EMAIL,
+    purpose: OtpPurpose.CHANGE_PASSWORD,
+    code: data.otp,
+  });
+
+  const hashedPassword = await Bun.password.hash(data.newPassword);
   await prisma.$transaction([
     prisma.user.update({
-      where: { id: resetToken.userId },
+      where: { id: user.id },
       data: { password: hashedPassword },
     }),
-    prisma.passwordResetToken.delete({
-      where: { id: resetToken.id },
+    prisma.refreshToken.updateMany({
+      where: { userId: user.id, revokedAt: null },
+      data: { revokedAt: new Date() },
     }),
   ]);
 
   try {
-    await redis.del(`user:${resetToken.userId}:profile`);
+    await redis.del(`user:${user.id}:profile`);
   } catch (error) {
-    console.error('Redis Del Reset Cache Error:', error);
+    console.error('Redis Del Change Password Cache Error:', error);
   }
 };

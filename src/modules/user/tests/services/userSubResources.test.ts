@@ -66,7 +66,7 @@ describe('User Sub-Resources & Aligned Services Unit Tests', () => {
         id: 2,
         name: 'U Thuzana',
         phone: '09100000002',
-        roleId: 1, // Monk in Node
+        roleId: 2, // Monk in .NET C# spec
         email: 'thuzana@monastery.org',
         contactPhone: '09100000002',
       };
@@ -76,7 +76,7 @@ describe('User Sub-Resources & Aligned Services Unit Tests', () => {
       expect(mapped.name).toBe('U Thuzana');
       expect(mapped.phoneNumber).toBe('09100000002');
       expect(mapped.phone).toBe('09100000002');
-      expect(mapped.roleId).toBe(1);
+      expect(mapped.roleId).toBe(2);
       expect(mapped.roleName).toBe('Monk');
       expect(mapped.contactPhoneNumber).toBe('09100000002');
       expect(mapped.email).toBe('thuzana@monastery.org');
@@ -87,7 +87,7 @@ describe('User Sub-Resources & Aligned Services Unit Tests', () => {
         id: 3,
         name: 'Daw Hla',
         phone: '09200000001',
-        roleId: 2, // Donor in Node
+        roleId: 3, // Donor in .NET C# spec
       });
       expect(mapped.roleName).toBe('Donor');
     });
@@ -97,26 +97,26 @@ describe('User Sub-Resources & Aligned Services Unit Tests', () => {
         id: 1,
         name: 'Admin User',
         phone: '09300000001',
-        roleId: 3, // Admin in Node
+        roleId: 1, // Admin in .NET C# spec
       });
       expect(mapped.roleName).toBe('Admin');
     });
   });
 
   describe('updateUserService role security', () => {
-    it('should reject role change if caller is not an Admin (roleId 3)', async () => {
+    it('should reject role change if caller is not an Admin (roleId 1)', async () => {
       prisma.user.findUnique = mock(() =>
         Promise.resolve({
           id: 2,
-          roleId: 1,
+          roleId: 2,
           name: 'Monk User',
           phone: '09100000002',
           isDeleted: false,
         })
       ) as unknown as typeof prisma.user.findUnique;
 
-      // Caller has roleId 1 (Monk) trying to change own roleId to 3
-      expect(updateUserService(2, { roleId: 3 }, 1)).rejects.toThrow(
+      // Caller has roleId 2 (Monk) trying to change own roleId to 1
+      expect(updateUserService(2, { roleId: 1 }, 2)).rejects.toThrow(
         'Changing user role requires administrative privileges'
       );
     });
@@ -127,7 +127,7 @@ describe('User Sub-Resources & Aligned Services Unit Tests', () => {
       prisma.user.findFirst = mock(() =>
         Promise.resolve({
           id: 2,
-          roleId: 1,
+          roleId: 2,
           isDeleted: false,
           monkProfile: {
             id: 1,
@@ -148,7 +148,7 @@ describe('User Sub-Resources & Aligned Services Unit Tests', () => {
       prisma.user.findFirst = mock(() =>
         Promise.resolve({
           id: 3,
-          roleId: 2, // Donor
+          roleId: 3, // Donor
           isDeleted: false,
           monkProfile: null,
         })
@@ -163,7 +163,7 @@ describe('User Sub-Resources & Aligned Services Unit Tests', () => {
       prisma.user.findFirst = mock(() =>
         Promise.resolve({
           id: 2,
-          roleId: 1,
+          roleId: 2,
           isDeleted: false,
         })
       ) as unknown as typeof prisma.user.findFirst;
@@ -190,7 +190,7 @@ describe('User Sub-Resources & Aligned Services Unit Tests', () => {
       prisma.user.findFirst = mock(() =>
         Promise.resolve({
           id: 2,
-          roleId: 1,
+          roleId: 2,
           isDeleted: false,
         })
       ) as unknown as typeof prisma.user.findFirst;

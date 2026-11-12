@@ -32,8 +32,8 @@ export const checkSpacePermission = (requiredPermission: SpacePermission) => {
         return next(new AppError('Unauthorized: Missing user authentication', 401));
       }
 
-      // 1. SuperAdmin Bypass (Global System Admin roleId = 3)
-      if (user.roleId === 3) {
+      // 1. SuperAdmin Bypass (Global System Admin roleId = 1)
+      if (user.roleId === 1) {
         return next();
       }
 
