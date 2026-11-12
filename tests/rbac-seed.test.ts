@@ -28,6 +28,9 @@ function table(rows: Row[]) {
     update: mock(async ({ where, data }: { where: { id: number }; data: Partial<Row> }) => {
       const row = rows.find((r) => r.id === where.id);
       if (!row) throw new Error('Missing test row');
+      if (data.name && rows.some((r) => r.id !== row.id && r.name === data.name)) {
+        throw new Error(`Unique constraint failed on name: ${data.name}`);
+      }
       Object.assign(row, data);
       return row;
     }),
@@ -45,6 +48,9 @@ function table(rows: Row[]) {
           where.id !== undefined ? r.id === where.id : r.name === where.name
         );
         if (row) {
+          if (update.name && rows.some((r) => r.id !== row.id && r.name === update.name)) {
+            throw new Error(`Unique constraint failed on name: ${update.name}`);
+          }
           Object.assign(row, update);
           return row;
         }
@@ -63,11 +69,30 @@ mock.module('@/lib/prisma', () => ({
     permission: table(permissions),
     spacePermission: table(spacePermissions),
     rolePermission: {
-      findFirst: mock(async () => null),
+      findFirst: mock(
+        async ({ where }: { where: { roleId: number; permissionId: number } }) =>
+          roleGrants.find(
+            (g) => g.roleId === where.roleId && g.permissionId === where.permissionId
+          ) ?? null
+      ),
       create: mock(async ({ data }: { data: (typeof roleGrants)[number] }) => {
         roleGrants.push(data);
         return data;
       }),
+      deleteMany: mock(
+        async ({ where }: { where: { roleId: number; permissionId?: { notIn: number[] } } }) => {
+          const notIn = where.permissionId?.notIn ?? [];
+          for (let i = roleGrants.length - 1; i >= 0; i--) {
+            if (
+              roleGrants[i].roleId === where.roleId &&
+              !notIn.includes(roleGrants[i].permissionId)
+            ) {
+              roleGrants.splice(i, 1);
+            }
+          }
+          return { count: 0 };
+        }
+      ),
     },
     spaceRolePermission: {
       findFirst: mock(async () => null),
@@ -105,17 +130,17 @@ test('permission initialization preserves occupied IDs and disabled permissions'
 test('RBAC seed preserves role IDs and grants the documented workflows', async () => {
   await seedRbac();
   expect(roles.map((r) => [r.id, r.name])).toEqual([
-    [1, 'Monk'],
-    [2, 'Donor'],
-    [3, 'Admin'],
+    [1, 'Admin'],
+    [2, 'Monk'],
+    [3, 'Donor'],
   ]);
   const systemNames = (id: number) =>
     roleGrants
       .filter((g) => g.roleId === id)
       .map((g) => permissions.find((p) => p.id === g.permissionId)?.name);
-  expect(systemNames(1)).not.toContain('Role.Create');
+  expect(systemNames(1)).toContain('Role.Create');
   expect(systemNames(2)).not.toContain('Role.Create');
-  expect(systemNames(3)).toContain('Role.Create');
+  expect(systemNames(3)).not.toContain('Role.Create');
   const spaceNames = (id: number) =>
     spaceGrants
       .filter((g) => g.spaceRoleId === id)
@@ -125,4 +150,49 @@ test('RBAC seed preserves role IDs and grants the documented workflows', async (
   }
   expect(spaceNames(3)).not.toContain('Space.Delete');
   expect(spaceNames(4)).toContain('Donation.View');
+});
+
+test('RBAC seed safely swaps legacy role names and prunes stale permissions', async () => {
+  roles.length = 0;
+  roles.push(
+    { id: 1, name: 'Monk', isDeleted: false },
+    { id: 2, name: 'Donor', isDeleted: false },
+    { id: 3, name: 'Admin', isDeleted: false }
+  );
+
+  await seedRbac();
+
+  const roleCreatePerm = permissions.find((p) => p.name === 'Role.Create');
+  expect(roleCreatePerm).toBeDefined();
+  if (roleCreatePerm) {
+    // Simulate legacy Admin permission remaining on roleId 3 before re-seeding
+    roleGrants.push({ roleId: 3, permissionId: roleCreatePerm.id });
+  }
+
+  // Reset roles back to legacy order and run seedRbac again
+  roles.length = 0;
+  roles.push(
+    { id: 1, name: 'Monk', isDeleted: false },
+    { id: 2, name: 'Donor', isDeleted: false },
+    { id: 3, name: 'Admin', isDeleted: false }
+  );
+
+  await seedRbac();
+
+  expect(roles.map((r) => [r.id, r.name])).toEqual([
+    [1, 'Admin'],
+    [2, 'Monk'],
+    [3, 'Donor'],
+  ]);
+
+  const systemNames = (id: number) =>
+    roleGrants
+      .filter((g) => g.roleId === id)
+      .map((g) => permissions.find((p) => p.id === g.permissionId)?.name);
+
+  expect(systemNames(1)).toContain('Role.Create');
+  expect(systemNames(2)).toContain('Monastery.Create');
+  expect(systemNames(2)).toContain('Donation.Review');
+  expect(systemNames(3)).not.toContain('Role.Create');
+  expect(systemNames(3)).not.toContain('Monastery.Create');
 });

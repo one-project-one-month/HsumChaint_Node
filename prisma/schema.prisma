@@ -85,17 +85,60 @@ model SpaceRolePermission {
   @@index([spacePermissionId], map: "IX_Space_Role_Permission_permission_id")
   @@map("Space_Role_Permission")
 }
+model LoginMode {
+  id                       Int      @id @default(autoincrement())
+  code                     String   @unique(map: "UX_Login_Mode_code") @db.VarChar(30)
+  displayName              String   @map("display_name") @db.VarChar(100)
+  isActive                 Boolean  @default(false) @map("is_active")
+  requirePhoneVerification Boolean  @default(false) @map("require_phone_verification")
+  requireEmailVerification Boolean  @default(false) @map("require_email_verification")
+  updatedById              Int?     @map("updated_by_id")
+  createdAt                DateTime @default(now()) @map("created_at")
+  updatedAt                DateTime @default(now()) @updatedAt @map("updated_at")
+
+  updatedBy                User?    @relation("LoginModeUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+
+  @@index([isActive], map: "IX_Login_Mode_is_active")
+  @@index([updatedById], map: "IX_Login_Mode_updated_by_id")
+  @@map("Login_Mode")
+}
+
+model OtpCode {
+  id                 BigInt    @id
+  userId             Int?      @map("user_id")
+  channel            String    @db.VarChar(20)
+  purpose            String    @db.VarChar(30)
+  destination        String    @db.VarChar(255)
+  codeHash           String    @map("code_hash") @db.VarChar(255)
+  expiresAt          DateTime  @map("expires_at")
+  isUsed             Boolean   @default(false) @map("is_used")
+  usedAt             DateTime? @map("used_at")
+  revokedAt          DateTime? @map("revoked_at")
+  failedAttemptCount Int       @default(0) @map("failed_attempt_count")
+  maxAttemptCount    Int       @default(5) @map("max_attempt_count")
+  createdAt          DateTime  @default(now()) @map("created_at")
+
+  user               User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId], map: "IX_Otp_Code_user_id")
+  @@index([destination, channel, purpose, createdAt], map: "IX_Otp_Code_lookup")
+  @@index([expiresAt], map: "IX_Otp_Code_expires_at")
+  @@index([usedAt, expiresAt, revokedAt], map: "IX_Otp_Code_cleanup")
+  @@map("Otp_Code")
+}
 
 model User {
   id            Int       @id @default(autoincrement())
   roleId        Int       @map("role_id")
   name          String    @db.VarChar(255)
-  phone         String    @unique @db.VarChar(191)
+  phone         String?   @db.VarChar(50)
   password      String    @db.VarChar(255)
-  email         String?   @unique @db.VarChar(255)
+  email         String?   @db.VarChar(255)
   contactPhone  String?   @map("contact_phone") @db.VarChar(191)
   fcmToken      String?   @map("fcm_token") @db.VarChar(255)
   avatar        String?
+  phoneVerifiedAt DateTime? @map("phone_verified_at")
+  emailVerifiedAt DateTime? @map("email_verified_at")
   createdAt     DateTime  @default(now()) @map("created_at")
   updatedAt     DateTime  @updatedAt @map("updated_at")
   isDeleted     Boolean   @default(false) @map("is_deleted")
@@ -113,7 +156,12 @@ model User {
   invitationsSent     Invitation[]      @relation("InvitedByUser")
   invitationsReceived Invitation[]      @relation("InvitedUser")
   passwordResetTokens PasswordResetToken[]
+  otpCodes            OtpCode[]
+  updatedLoginModes   LoginMode[]       @relation("LoginModeUpdatedBy")
   
+  @@unique([phone, isDeleted], map: "UX_User_phone_active")
+  @@unique([email, isDeleted], map: "UX_User_email_active")
+  @@index([roleId], map: "IX_User_role_id")
   @@index([isDeleted, roleId, createdAt(sort: Desc)], map: "users_is_deleted_user_type_created_at_idx")
   @@index([name], map: "users_username_idx")
   @@index([contactPhone], map: "users_contactPhone_idx")
