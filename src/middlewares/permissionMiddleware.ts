@@ -233,10 +233,6 @@ export const checkPermission = (requiredPermission: string) => {
         aliases.add('Roles.Manage');
         aliases.add('Role.Manage');
       }
-      if (requiredPermission === 'Users.View' || requiredPermission === 'User.View') {
-        aliases.add('Users.View');
-        aliases.add('User.View');
-      }
       if (requiredPermission === 'Users.Update' || requiredPermission === 'User.Update') {
         aliases.add('Users.Update');
         aliases.add('User.Update');
@@ -250,7 +246,6 @@ export const checkPermission = (requiredPermission: string) => {
         aliases.add('User.Manage');
         aliases.add('User.Delete');
       }
-
       // Check if user has permission
       const hasPerm = Array.from(aliases).some((p) => permissions.includes(p));
       if (!hasPerm) {
@@ -322,11 +317,22 @@ export const checkSelfOrPermission = (adminPermission: string) => {
 
       // 3. Admin permission check
       const permissions = await getRolePermissions(user.roleId);
-      const hasPermission =
-        permissions.includes(adminPermission) ||
-        permissions.some((p) => p.toLowerCase() === adminPermission.toLowerCase()) ||
-        (adminPermission.toLowerCase().startsWith('user.') &&
-          permissions.some((p) => p.toLowerCase().startsWith('user.')));
+      const aliases = new Set<string>([adminPermission]);
+      if (adminPermission === 'Users.Update' || adminPermission === 'User.Update') {
+        aliases.add('Users.Update');
+        aliases.add('User.Update');
+      }
+      if (
+        adminPermission === 'Users.Manage' ||
+        adminPermission === 'User.Manage' ||
+        adminPermission === 'User.Delete'
+      ) {
+        aliases.add('Users.Manage');
+        aliases.add('User.Manage');
+        aliases.add('User.Delete');
+      }
+
+      const hasPermission = Array.from(aliases).some((p) => permissions.includes(p));
       if (!hasPermission) {
         return next(new AppError('Forbidden', 403));
       }

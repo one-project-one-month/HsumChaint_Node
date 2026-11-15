@@ -144,17 +144,10 @@ export const userFeedPaginationSchema = z.object({
   params: z.object({
     id: z.string().regex(/^\d+$/, 'ID must be a number').transform(Number),
   }),
-  query: z
-    .object({
-      lastId: z.coerce.number().int().positive().optional(),
-      LastId: z.coerce.number().int().positive().optional(),
-      pageSize: z.coerce.number().int().positive().max(100).optional().default(15),
-      PageSize: z.coerce.number().int().positive().max(100).optional(),
-    })
-    .transform((q) => ({
-      lastId: q.lastId ?? q.LastId,
-      pageSize: q.PageSize ?? q.pageSize,
-    })),
+  query: z.object({
+    lastId: z.coerce.number().int().positive().optional(),
+    pageSize: z.coerce.number().int().positive().max(100).optional().default(15),
+  }),
 });
 
 export const updateMonkProfileSchema = z.object({

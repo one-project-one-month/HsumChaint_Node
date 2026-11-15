@@ -1,6 +1,7 @@
 import type { MonkProfile, Prisma } from 'prisma-client';
 import { prisma } from '@/lib/prisma';
 import { redis } from '@/lib/redis';
+import { getRolePermissions } from '@/middlewares/permissionMiddleware';
 import { AppError } from '@/utils/AppError';
 import { buildListCacheKey, clearUserListCache } from '@/utils/cache.util';
 import type {
@@ -49,6 +50,7 @@ export const mapUserDto = (user: {
   createdAt?: Date;
   avatar?: string | null;
   monkProfile?: MonkProfile | null;
+  permissions?: string[];
 }) => ({
   id: user.id,
   name: user.name,
@@ -62,13 +64,14 @@ export const mapUserDto = (user: {
   avatar: user.avatar ?? null,
   createdAt: user.createdAt,
   monkProfile: user.monkProfile ?? null,
+  ...(user.permissions !== undefined ? { permissions: user.permissions } : {}),
 });
 
 // --- Query Services using Redis ---
 
 export const getAllUserService = async (data: getAllUsersInput) => {
-  const pageNumber = data.pageNumber ?? data.page ?? 1;
-  const pageSize = data.pageSize ?? data.limit ?? 10;
+  const pageNumber = Number(data.pageNumber ?? data.page ?? 1);
+  const pageSize = Number(data.pageSize ?? data.limit ?? 10);
 
   // Create a unique fingerprint for specific search
   const cacheKey = buildListCacheKey(data);
@@ -150,7 +153,11 @@ const getUserWithProfile = async (id: number) => {
       try {
         const profile = JSON.parse(cachedUser);
         if (typeof profile.name === 'string' && typeof profile.roleId === 'number') {
-          return mapUserDto(profile);
+          const permissions =
+            Array.isArray(profile.permissions) && profile.permissions.length > 0
+              ? profile.permissions
+              : await getRolePermissions(profile.roleId);
+          return mapUserDto({ ...profile, permissions });
         }
       } catch {
         await redis.del(cachedKey);
@@ -167,7 +174,8 @@ const getUserWithProfile = async (id: number) => {
 
   if (!user) throw new AppError('User not found', 404);
 
-  const mapped = mapUserDto(user);
+  const permissions = await getRolePermissions(user.roleId);
+  const mapped = mapUserDto({ ...user, permissions });
 
   try {
     await redis.set(cachedKey, JSON.stringify(mapped), 'EX', 3600);
@@ -228,7 +236,7 @@ export const updateUserService = async (
     ...(hashedPassword !== undefined && { password: hashedPassword }),
     ...(data.contactPhone !== undefined && { contactPhone: data.contactPhone }),
     ...(data.avatar !== undefined && { avatar: data.avatar }),
-    ...(callerRoleId === 3 &&
+    ...(callerRoleId === 1 &&
       data.roleId !== undefined && { role: { connect: { id: data.roleId } } }),
   };
 
@@ -238,7 +246,7 @@ export const updateUserService = async (
   if (data.monasteryAddress !== undefined) monkProfileData.monasteryAddress = data.monasteryAddress;
 
   if (Object.keys(monkProfileData).length > 0) {
-    if (user.roleId !== 1) {
+    if (user.roleId !== 1 && user.roleId !== 2) {
       throw new AppError('Only monks can update monastery info', 400);
     }
     updateData.monkProfile = { update: monkProfileData };
@@ -253,7 +261,8 @@ export const updateUserService = async (
   await redis.del(`user:${id}:profile`);
   await clearUserListCache();
 
-  return mapUserDto(updatedUser);
+  const permissions = await getRolePermissions(updatedUser.roleId);
+  return mapUserDto({ ...updatedUser, permissions });
 };
 
 export const softDeleteUserService = async (data: idParamsInput) => {
@@ -358,8 +367,10 @@ export const deleteMonkProfileService = async (userId: number) => {
 
 export const getUserReceivedInvitationsService = async (
   userId: number,
-  { pageNumber, pageSize }: { pageNumber: number; pageSize: number }
+  query: { pageNumber?: number; pageSize?: number }
 ) => {
+  const pageNumber = Number(query.pageNumber ?? 1);
+  const pageSize = Number(query.pageSize ?? 10);
   const skip = (pageNumber - 1) * pageSize;
   const where = { invitedUserId: userId };
 
@@ -409,8 +420,11 @@ export const getUserReceivedInvitationsService = async (
 
 export const getUserReceivedInvitationsFeedService = async (
   userId: number,
-  { lastId, pageSize }: { lastId?: number; pageSize: number }
+  query: { lastId?: number; pageSize?: number }
 ) => {
+  const lastId = query.lastId !== undefined ? Number(query.lastId) : undefined;
+  const pageSize = Number(query.pageSize ?? 15);
+
   const where: Prisma.InvitationWhereInput = {
     invitedUserId: userId,
     ...(lastId ? { id: { lt: lastId } } : {}),
@@ -458,8 +472,10 @@ export const getUserReceivedInvitationsFeedService = async (
 
 export const getUserSentInvitationsService = async (
   userId: number,
-  { pageNumber, pageSize }: { pageNumber: number; pageSize: number }
+  query: { pageNumber?: number; pageSize?: number }
 ) => {
+  const pageNumber = Number(query.pageNumber ?? 1);
+  const pageSize = Number(query.pageSize ?? 10);
   const skip = (pageNumber - 1) * pageSize;
   const where = { invitedById: userId };
 
@@ -509,8 +525,11 @@ export const getUserSentInvitationsService = async (
 
 export const getUserSentInvitationsFeedService = async (
   userId: number,
-  { lastId, pageSize }: { lastId?: number; pageSize: number }
+  query: { lastId?: number; pageSize?: number }
 ) => {
+  const lastId = query.lastId !== undefined ? Number(query.lastId) : undefined;
+  const pageSize = Number(query.pageSize ?? 15);
+
   const where: Prisma.InvitationWhereInput = {
     invitedById: userId,
     ...(lastId ? { id: { lt: lastId } } : {}),
@@ -560,8 +579,10 @@ export const getUserSentInvitationsFeedService = async (
 
 export const getUserNotificationsOffsetService = async (
   userId: number,
-  { pageNumber, pageSize }: { pageNumber: number; pageSize: number }
+  query: { pageNumber?: number; pageSize?: number }
 ) => {
+  const pageNumber = Number(query.pageNumber ?? 1);
+  const pageSize = Number(query.pageSize ?? 10);
   const skip = (pageNumber - 1) * pageSize;
   const where = { userId, isDeleted: false };
 
@@ -600,8 +621,11 @@ export const getUserNotificationsOffsetService = async (
 
 export const getUserNotificationsCursorFeedService = async (
   userId: number,
-  { lastId, pageSize }: { lastId?: number; pageSize: number }
+  query: { lastId?: number; pageSize?: number }
 ) => {
+  const lastId = query.lastId !== undefined ? Number(query.lastId) : undefined;
+  const pageSize = Number(query.pageSize ?? 15);
+
   const where: Prisma.NotificationWhereInput = {
     userId,
     isDeleted: false,

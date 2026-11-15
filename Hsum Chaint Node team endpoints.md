@@ -359,14 +359,14 @@ All API responses strictly utilize standardized envelopes matching the .NET spec
 
 ---
 
-### 4.2. Users & Profile Management (`/api/user`, `/api/v1/users`)
+### 4.2. User & Profile Management (`/api/v1/user`)
 
-#### 7. Get All Users
+#### 4. Get All Users
 - **Method**: `GET`
-- **Route**: `/api/user` (alias: `/api/v1/users`)
+- **Route**: `/api/v1/user`
 - **Target User Role**: `System Admin`
 - **Required Permission**: `Users.View`
-- **Description**: Retrieves a paginated list of all active registered users.
+- **Description**: Retrieves a paginated list of all active registered users across the entire system.
 - **Query Parameters (Offset Pagination)**:
   - `pageNumber` (int, default: 1)
   - `pageSize` (int, default: 10)
@@ -383,10 +383,19 @@ All API responses strictly utilize standardized envelopes matching the .NET spec
   "isFailure": false,
   "data": [
     {
+      "id": 1,
+      "name": "System Administrator",
+      "phoneNumber": "09100000001",
+      "roleId": 1,
+      "roleName": "Admin",
+      "email": "admin@monastery.org",
+      "contactPhoneNumber": "09100000001"
+    },
+    {
       "id": 2,
       "name": "U Thuzana",
       "phoneNumber": "09100000002",
-      "roleId": 1,
+      "roleId": 2,
       "roleName": "Monk",
       "email": "thuzana@monastery.org",
       "contactPhoneNumber": "09100000002"
@@ -395,7 +404,7 @@ All API responses strictly utilize standardized envelopes matching the .NET spec
   "pagination": {
     "pageNumber": 1,
     "pageSize": 10,
-    "totalCount": 1,
+    "totalCount": 2,
     "totalPages": 1,
     "hasPreviousPage": false,
     "hasNextPage": false
@@ -405,9 +414,9 @@ All API responses strictly utilize standardized envelopes matching the .NET spec
 
 ---
 
-#### 8. Get User Profile by ID
+#### 5. Get User Profile by ID
 - **Method**: `GET`
-- **Route**: `/api/user/:id` (alias: `/api/v1/users/:id`, `/api/v1/users/me`)
+- **Route**: `/api/v1/user/:id` (and `/api/v1/user/me`)
 - **Target User Role**: Any Authenticated User (Self) or `System Admin`
 - **Required Permission**: Self (`UserId == id`) or `Users.View`
 - **Path Parameters**:
@@ -423,29 +432,53 @@ All API responses strictly utilize standardized envelopes matching the .NET spec
     "id": 2,
     "name": "U Thuzana",
     "phoneNumber": "09100000002",
-    "roleId": 1,
+    "phone": "09100000002",
+    "roleId": 2,
     "roleName": "Monk",
     "email": "thuzana@monastery.org",
-    "contactPhoneNumber": "09100000002"
+    "contactPhoneNumber": "09100000002",
+    "contactPhone": "09100000002",
+    "avatar": null,
+    "createdAt": "2026-11-01T08:00:00.000Z",
+    "monkProfile": {
+      "id": 1,
+      "userId": 2,
+      "monasteryName": "Mahagandhayon Monastery",
+      "monasteryAddress": "Amarapura, Mandalay"
+    },
+    "permissions": [
+      "Donor.View",
+      "Monastery.View",
+      "Monastery.Create",
+      "Monastery.Update",
+      "Monastery.Delete",
+      "Monastery.ManageMembers",
+      "Donation.View",
+      "Donation.Create",
+      "Donation.Review",
+      "Donation.Schedule",
+      "Donation.Cancel",
+      "Donation.Delete"
+    ]
   }
 }
 ```
 
 ---
 
-#### 9. Update User Profile
+#### 6. Update User Profile
 - **Method**: `PUT`
-- **Route**: `/api/user` (alias: `/api/v1/users`, `/api/v1/users/:id`)
+- **Route**: `/api/v1/user`
 - **Target User Role**: Any Authenticated User (Self) or `System Admin`
 - **Required Permission**: `Users.Update`
-- **Description**: Updates profile attributes. Non-admin users cannot alter their own `roleId`; only admins can modify role assignments. Supports multipart/form-data for avatar uploads.
+- **Description**: Updates profile attributes (Name, Phone Number, Email, Contact Phone). Regular users cannot alter their own `roleId`; only Admins with `Users.Manage` and `Roles.Assign` can modify role assignments. Supports multipart/form-data for avatar uploads.
 - **Request Body**:
 ```json
 {
   "id": 2,
   "name": "U Thuzana Updated",
   "phoneNumber": "09100000002",
-  "roleId": 1,
+  "roleId": 2,
   "email": "updated@monastery.org",
   "contactPhoneNumber": "09100000002"
 }
@@ -461,7 +494,7 @@ All API responses strictly utilize standardized envelopes matching the .NET spec
     "id": 2,
     "name": "U Thuzana Updated",
     "phoneNumber": "09100000002",
-    "roleId": 1,
+    "roleId": 2,
     "roleName": "Monk",
     "email": "updated@monastery.org",
     "contactPhoneNumber": "09100000002"
@@ -471,9 +504,9 @@ All API responses strictly utilize standardized envelopes matching the .NET spec
 
 ---
 
-#### 10. Soft Delete User Account
+#### 7. Soft Delete User Account
 - **Method**: `DELETE`
-- **Route**: `/api/user/:id` (alias: `/api/v1/users/:id`)
+- **Route**: `/api/v1/user/:id`
 - **Target User Role**: `System Admin`
 - **Required Permission**: `Users.Manage`
 - **Path Parameters**:
@@ -490,11 +523,11 @@ All API responses strictly utilize standardized envelopes matching the .NET spec
 
 ---
 
-#### 11. Get User's Received Invitations (Web Offset Pagination)
+#### 8. Get User's Received Invitations (Web Offset Pagination)
 - **Method**: `GET`
-- **Route**: `/api/user/:id/invitations` (alias: `/api/v1/users/:id/invitations`)
-- **Target User Role**: Self or `System Admin`
-- **Required Permission**: Self or `Invitation.View`
+- **Route**: `/api/v1/user/:id/invitations`
+- **Target User Role**: Any Authenticated User (Self) or `System Admin`
+- **Required Permission**: `Invitation.View`
 - **Query Parameters**:
   - `pageNumber` (int, default: 1)
   - `pageSize` (int, default: 10)
@@ -516,7 +549,7 @@ All API responses strictly utilize standardized envelopes matching the .NET spec
       "invitedByName": "U Thuzana",
       "spaceRoleId": 3,
       "spaceRoleName": "Editor",
-      "status": 0,
+      "status": "PENDING",
       "createdAt": "2026-11-01T08:00:00Z"
     }
   ],
@@ -533,11 +566,11 @@ All API responses strictly utilize standardized envelopes matching the .NET spec
 
 ---
 
-#### 12. Get User's Received Invitations Feed (Mobile Keyset Cursor Pagination)
+#### 8.1. Get User's Received Invitations Feed (Mobile Keyset Cursor Pagination)
 - **Method**: `GET`
-- **Route**: `/api/user/:id/invitations/feed` (alias: `/api/v1/users/:id/invitations/feed`)
-- **Target User Role**: Self or `System Admin`
-- **Required Permission**: Self or `Invitation.View`
+- **Route**: `/api/v1/user/:id/invitations/feed`
+- **Target User Role**: Any Authenticated User (Self) or `System Admin`
+- **Required Permission**: `Invitation.View`
 - **Query Parameters**:
   - `lastId` (int, optional): ID of the last item in previous batch.
   - `pageSize` (int, default: 15)
@@ -559,7 +592,7 @@ All API responses strictly utilize standardized envelopes matching the .NET spec
       "invitedByName": "U Thuzana",
       "spaceRoleId": 3,
       "spaceRoleName": "Editor",
-      "status": 0,
+      "status": "PENDING",
       "createdAt": "2026-11-01T08:00:00Z"
     }
   ],
@@ -573,33 +606,33 @@ All API responses strictly utilize standardized envelopes matching the .NET spec
 
 ---
 
-#### 13. Get User's Sent Invitations (Web Offset Pagination)
+#### 9. Get User's Sent Invitations (Web Offset Pagination)
 - **Method**: `GET`
-- **Route**: `/api/user/:id/invited-by-list` (alias: `/api/v1/users/:id/invited-by-list`)
-- **Target User Role**: Self or `System Admin`
-- **Required Permission**: Self or `Invitation.View`
+- **Route**: `/api/v1/user/:id/invited-by-list`
+- **Target User Role**: Any Authenticated User (Self) or `System Admin`
+- **Required Permission**: `Invitation.View`
 - **Query Parameters**: `pageNumber` (int, default: 1), `pageSize` (int, default: 10)
 - **Status Codes**: `200 OK`, `401 Unauthorized`, `403 Forbidden`
 - **Response `200 OK`**: `PagedResult<InvitationDto>`
 
 ---
 
-#### 13b. Get User's Sent Invitations Feed (Mobile Cursor Keyset Pagination)
+#### 9.1. Get User's Sent Invitations Feed (Mobile Cursor Keyset Pagination)
 - **Method**: `GET`
-- **Route**: `/api/user/:id/invited-by-list/feed` (alias: `/api/v1/users/:id/invited-by-list/feed`)
-- **Target User Role**: Self or `System Admin`
-- **Required Permission**: Self or `Invitation.View`
+- **Route**: `/api/v1/user/:id/invited-by-list/feed`
+- **Target User Role**: Any Authenticated User (Self) or `System Admin`
+- **Required Permission**: `Invitation.View`
 - **Query Parameters**: `lastId` (int, optional), `pageSize` (int, default: 15)
 - **Status Codes**: `200 OK`, `401 Unauthorized`, `403 Forbidden`
 - **Response `200 OK`**: `CursorPagedResult<InvitationDto>`
 
 ---
 
-#### 14. Get User Notifications (Web Offset Pagination)
+#### 10. Get User Notifications (Web Offset Pagination)
 - **Method**: `GET`
-- **Route**: `/api/user/:id/notification` (alias: `/api/v1/users/:id/notification`)
-- **Target User Role**: Self or `System Admin`
-- **Required Permission**: Self or `Notification.View`
+- **Route**: `/api/v1/user/:id/notification`
+- **Target User Role**: Any Authenticated User (Self) or `System Admin`
+- **Required Permission**: `Notification.View`
 - **Query Parameters**:
   - `pageNumber` (int, default: 1)
   - `pageSize` (int, default: 10)
@@ -614,7 +647,7 @@ All API responses strictly utilize standardized envelopes matching the .NET spec
     {
       "id": 10,
       "userId": 2,
-      "type": 1,
+      "type": "REMINDER",
       "message": "Your donation request has been accepted.",
       "isRead": false,
       "createdAt": "2026-11-05T06:00:00Z"
@@ -633,11 +666,11 @@ All API responses strictly utilize standardized envelopes matching the .NET spec
 
 ---
 
-#### 15. Get User Notifications Feed (Mobile Cursor Keyset Pagination)
+#### 10.1. Get User Notifications Feed (Mobile Cursor Keyset Pagination)
 - **Method**: `GET`
-- **Route**: `/api/user/:id/notification/feed` (alias: `/api/v1/users/:id/notification/feed`)
-- **Target User Role**: Self or `System Admin`
-- **Required Permission**: Self or `Notification.View`
+- **Route**: `/api/v1/user/:id/notification/feed`
+- **Target User Role**: Any Authenticated User (Self) or `System Admin`
+- **Required Permission**: `Notification.View`
 - **Query Parameters**:
   - `lastId` (int, optional): Last notification ID from previous page.
   - `pageSize` (int, default: 15)
@@ -652,7 +685,7 @@ All API responses strictly utilize standardized envelopes matching the .NET spec
     {
       "id": 10,
       "userId": 2,
-      "type": 1,
+      "type": "REMINDER",
       "message": "Your donation request has been accepted.",
       "isRead": false,
       "createdAt": "2026-11-05T06:00:00Z"
@@ -668,11 +701,11 @@ All API responses strictly utilize standardized envelopes matching the .NET spec
 
 ---
 
-#### 16. Clear All User Notifications
+#### 11. Clear All User Notifications
 - **Method**: `DELETE`
-- **Route**: `/api/user/:id/notification` (alias: `/api/v1/users/:id/notification`)
-- **Target User Role**: Self or `System Admin`
-- **Required Permission**: Self or `Notification.Manage`
+- **Route**: `/api/v1/user/:id/notification`
+- **Target User Role**: Any Authenticated User (Self) or `System Admin`
+- **Required Permission**: `Notification.Manage`
 - **Status Codes**: `200 OK`, `401 Unauthorized`, `403 Forbidden`
 - **Response `200 OK` (Standard Void Result)**:
 ```json
@@ -685,11 +718,11 @@ All API responses strictly utilize standardized envelopes matching the .NET spec
 
 ---
 
-#### 17. Get Monk Profile
+#### 12. Get Monk Profile
 - **Method**: `GET`
-- **Route**: `/api/user/:id/monk-profile` (alias: `/api/v1/users/:id/monk-profile`)
+- **Route**: `/api/v1/user/:id/monk-profile`
 - **Target User Role**: `Monk` (Self) or `System Admin`
-- **Required Permission**: Self or `Users.View`
+- **Required Permission**: `Users.View`
 - **Status Codes**: `200 OK`, `400 Bad Request`, `401 Unauthorized`, `403 Forbidden`
 - **Response `200 OK` (Result<MonkProfileDto>)**:
 ```json
@@ -708,11 +741,11 @@ All API responses strictly utilize standardized envelopes matching the .NET spec
 
 ---
 
-#### 18. Update Monk Profile
-- **Method**: `PATCH` (alias: `PUT`)
-- **Route**: `/api/user/:id/monk-profile` (alias: `/api/v1/users/:id/monk-profile`)
+#### 13. Update Monk Profile
+- **Method**: `PUT`
+- **Route**: `/api/v1/user/:id/monk-profile`
 - **Target User Role**: `Monk` (Self) or `System Admin`
-- **Required Permission**: Self or `Users.Update`
+- **Required Permission**: `Users.Update`
 - **Request Body**:
 ```json
 {
@@ -738,11 +771,11 @@ All API responses strictly utilize standardized envelopes matching the .NET spec
 
 ---
 
-#### 19. Delete Monk Profile
+#### 14. Delete Monk Profile
 - **Method**: `DELETE`
-- **Route**: `/api/user/:id/monk-profile` (alias: `/api/v1/users/:id/monk-profile`)
+- **Route**: `/api/v1/user/:id/monk-profile`
 - **Target User Role**: `Monk` (Self) or `System Admin`
-- **Required Permission**: Self or `Users.Manage`
+- **Required Permission**: `Users.Manage`
 - **Status Codes**: `200 OK`, `400 Bad Request`, `401 Unauthorized`, `403 Forbidden`
 - **Response `200 OK` (Standard Void Result)**:
 ```json
@@ -755,11 +788,11 @@ All API responses strictly utilize standardized envelopes matching the .NET spec
 
 ---
 
-#### 20. Get User Reminder & Notification Settings
+#### 15. Get User Reminder & Notification Settings
 - **Method**: `GET`
-- **Route**: `/api/user/:id/settings` (alias: `/api/v1/users/:id/settings`, `/api/v1/user-settings/me`)
+- **Route**: `/api/v1/user/:id/settings`
 - **Target User Role**: Any Authenticated User (Self) or `System Admin`
-- **Required Permission**: Self or `Users.View`
+- **Required Permission**: `Users.View`
 - **Status Codes**: `200 OK`, `401 Unauthorized`, `403 Forbidden`
 - **Response `200 OK` (Result<UserSettingDto>)**:
 ```json
@@ -779,11 +812,11 @@ All API responses strictly utilize standardized envelopes matching the .NET spec
 
 ---
 
-#### 21. Update User Reminder & Notification Settings
+#### 16. Update User Reminder & Notification Settings
 - **Method**: `PUT`
-- **Route**: `/api/user/:id/settings` (alias: `/api/v1/users/:id/settings`, `/api/v1/user-settings/me`)
+- **Route**: `/api/v1/user/:id/settings`
 - **Target User Role**: Any Authenticated User (Self) or `System Admin`
-- **Required Permission**: Self or `Users.Update`
+- **Required Permission**: `Users.Update`
 - **Request Body**:
 ```json
 {

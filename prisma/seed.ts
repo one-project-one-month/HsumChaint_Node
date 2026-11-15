@@ -50,6 +50,10 @@ export const SPACE_ROLES = [
 export const SYSTEM_PERMISSIONS = [
   ...DONATION_PERMISSIONS,
   // User Management
+  'Users.View',
+  'Users.Create',
+  'Users.Update',
+  'Users.Manage',
   'User.View',
   'User.Create',
   'User.Update',
@@ -60,6 +64,15 @@ export const SYSTEM_PERMISSIONS = [
   'Role.Create',
   'Role.Update',
   'Role.Delete',
+  'Roles.View',
+  'Roles.Manage',
+  'Roles.Assign',
+
+  // Invitations & Notifications
+  'Invitation.View',
+  'Invitation.Respond',
+  'Notification.View',
+  'Notification.Manage',
 
   // Donor Management
   'Donor.View',
@@ -209,24 +222,28 @@ export async function seedRbac() {
 
   // Monk (Role ID 2): Religious administrator (Monastery Spaces, Donors, Schedules)
   await assignSysPermissions(2, [
-    'User.View',
     'Donor.View',
     'Monastery.View',
     'Monastery.Create',
     'Monastery.Update',
     'Monastery.Delete',
     'Monastery.ManageMembers',
+    'Invitation.View',
+    'Notification.View',
+    'Notification.Manage',
     ...DONATION_PERMISSIONS,
   ]);
 
   // Donor (Role ID 3): Donors and devotees (View monasteries, donation requests, track donations)
   await assignSysPermissions(3, [
-    'User.View',
     'Donor.View',
     'Monastery.View',
     'Donation.View',
     'Donation.Create',
     'Donation.Cancel',
+    'Invitation.View',
+    'Notification.View',
+    'Notification.Manage',
   ]);
 
   logger.info('Seeding Space Roles and Space Permissions...');
