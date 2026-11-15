@@ -1,5 +1,4 @@
 import { expect, test } from 'bun:test';
-import { settingBody } from '../user-setting/user-setting.schema';
 import { dateStart, donationDate, localDate, localTime } from './calendar.time';
 
 test('Myanmar calendar day changes at 17:30 UTC', () => {
@@ -16,15 +15,4 @@ test('pickup takes precedence, followed by dropoff and creation date', () => {
   expect(donationDate({ createdAt, dropoffTime, pickupTime })).toBe(pickupTime);
   expect(donationDate({ createdAt, dropoffTime, pickupTime: null })).toBe(dropoffTime);
   expect(donationDate({ createdAt, dropoffTime: null, pickupTime: null })).toBe(createdAt);
-});
-
-test('settings reject invalid times and owner changes, support clearing fields', () => {
-  for (const value of ['24:00', '9:30', '12:60', '2026-10-22T10:00:00Z']) {
-    expect(settingBody.safeParse({ pickupTime: value }).success).toBe(false);
-  }
-  expect(settingBody.safeParse({ userId: 2 }).success).toBe(false);
-  expect(settingBody.parse({ pickupTime: null, dropoffTime: '23:59' })).toEqual({
-    pickupTime: null,
-    dropoffTime: '23:59',
-  });
 });

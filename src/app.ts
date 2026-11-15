@@ -20,7 +20,6 @@ import { spaceRouter } from './modules/space/space.routes';
 import spacePermissionRouter from './modules/space-permission/space-permission.routes';
 import spaceRoleRouter from './modules/space-role/space-role.routes';
 import { userRouter } from './modules/user/user.routes';
-import { userSettingRouter } from './modules/user-setting/user-setting.routes';
 import { errorResponse, successResponse } from './utils/response';
 
 const app = express();
@@ -56,7 +55,6 @@ app.use('/api/v1/space-roles', spaceRoleRouter);
 app.use('/api/v1/space-permissions', spacePermissionRouter);
 app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/donors', donorRouter);
-app.use('/api/v1/user-settings', userSettingRouter);
 app.use('/api/v1/notifications', notificationRouter);
 app.use('/api/v1/donations', donationRouter);
 app.use('/api/v1/donations', donationCalendarRouter);

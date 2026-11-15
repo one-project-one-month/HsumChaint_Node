@@ -40,6 +40,14 @@ router.get('/', validator(getAllUsersSchema), checkPermission('Users.View'), get
 router.get('/me', getMe);
 router.get('/:id', validator(idParamSchema), checkSelfOrPermission('Users.View'), getUserById);
 
+// Supports both PUT / (body id) per C# spec and PUT /:id per REST
+router.put(
+  '/',
+  upload.single('avatar'),
+  validator(updateUserSchema),
+  checkSelfOrPermission('Users.Update'),
+  updateUser
+);
 router.put(
   '/:id',
   upload.single('avatar'),

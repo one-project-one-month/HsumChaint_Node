@@ -122,8 +122,8 @@ All API responses strictly utilize standardized envelopes matching the .NET spec
 | `GET` | `/api/user/:id/monk-profile` | Users | Self (Monk) or `Users.View` | Monk, Admin |
 | `PATCH` | `/api/user/:id/monk-profile` (alias: `PUT`) | Users | Self (Monk) or `Users.Update` | Monk, Admin |
 | `DELETE` | `/api/user/:id/monk-profile` | Users | Self (Monk) or `Users.Manage` | Monk, Admin |
-| `GET` | `/api/user/:id/settings` (alias: `/api/v1/user-settings/me`) | Users | Self or `Users.View` | All (Self), Admin |
-| `PUT` | `/api/user/:id/settings` (alias: `/api/v1/user-settings/me`) | Users | Self or `Users.Update` | All (Self), Admin |
+| `GET` | `/api/user/:id/settings` | Users | Self or `Users.View` | All (Self), Admin |
+| `PUT` | `/api/user/:id/settings` | Users | Self or `Users.Update` | All (Self), Admin |
 | `GET` | `/api/v1/spaces` | Spaces | Authenticated | All Space Members, Admin |
 | `POST` | `/api/v1/spaces` | Spaces | `Monastery.Create` | Monk, Admin |
 | `GET` | `/api/v1/spaces/:id` | Spaces | Authenticated | Space Members & Admin |
@@ -845,60 +845,7 @@ All API responses strictly utilize standardized envelopes matching the .NET spec
 
 ---
 
-### 4.3. User Settings & Reminders (`/api/v1/user-settings`)
-
-#### 12. Get User Settings
-- **Method**: `GET`
-- **Route**: `/api/v1/user-settings/me`
-- **Target User Role**: All Authenticated Users
-- **Description**: Returns notification time preferences in Myanmar time (`HH:mm`). Auto-provisions a default record if one does not exist yet.
-- **Response `200 OK`**:
-```json
-{
-  "success": true,
-  "message": "User settings",
-  "data": {
-    "pickupTime": "06:00",
-    "dropoffTime": "17:00",
-    "pickupNotificationTime": "15:30",
-    "dropoffNotificationTime": "22:00"
-  }
-}
-```
-
----
-
-#### 13. Update User Settings
-- **Method**: `PUT`
-- **Route**: `/api/v1/user-settings/me`
-- **Target User Role**: All Authenticated Users
-- **Description**: Updates adjustable reminder and routine hours (`HH:mm` format).
-- **Request Body**:
-```json
-{
-  "pickupNotificationTime": "14:00",
-  "dropoffNotificationTime": "21:00",
-  "pickupTime": "06:30",
-  "dropoffTime": "16:30"
-}
-```
-- **Response `200 OK`**:
-```json
-{
-  "success": true,
-  "message": "Settings updated",
-  "data": {
-    "pickupTime": "06:30",
-    "dropoffTime": "16:30",
-    "pickupNotificationTime": "14:00",
-    "dropoffNotificationTime": "21:00"
-  }
-}
-```
-
----
-
-### 4.4. Spaces / Monasteries Management (`/api/v1/spaces` & `/api/v1/monasteries`)
+### 4.3. Spaces / Monasteries Management (`/api/v1/spaces` & `/api/v1/monasteries`)
 
 *(Note: `/api/v1/monasteries` is an exact alias mounted to the same router)*
 
@@ -1106,7 +1053,7 @@ All API responses strictly utilize standardized envelopes matching the .NET spec
 
 ---
 
-### 4.5. Space Members & Invitations (`/api/v1/spaces`)
+### 4.4. Space Members & Invitations (`/api/v1/spaces`)
 
 #### 21. List Space Members
 - **Method**: `GET`
@@ -1229,7 +1176,7 @@ All API responses strictly utilize standardized envelopes matching the .NET spec
 
 ---
 
-### 4.6. Donors Directory (`/api/v1/donors`)
+### 4.5. Donors Directory (`/api/v1/donors`)
 
 #### 26. Create Donor Contact
 - **Method**: `POST`
@@ -1354,7 +1301,7 @@ All API responses strictly utilize standardized envelopes matching the .NET spec
 
 ---
 
-### 4.7. Donations Management (`/api/v1/donations`)
+### 4.6. Donations Management (`/api/v1/donations`)
 
 *Domain Enums:*
 * **`DonationStatus`**: `0 = Draft`, `1 = Submitted`, `2 = PendingReview`, `3 = Accepted`, `4 = Scheduled`, `5 = Completed`, `6 = Rejected`, `7 = Cancelled`
@@ -1730,7 +1677,7 @@ All API responses strictly utilize standardized envelopes matching the .NET spec
 
 ---
 
-### 4.8. Donation Calendar Aggregation (`/api/v1/donations/calendar`)
+### 4.7. Donation Calendar Aggregation (`/api/v1/donations/calendar`)
 
 #### 44. Get Donation Calendar
 - **Method**: `GET`
@@ -1766,7 +1713,7 @@ All API responses strictly utilize standardized envelopes matching the .NET spec
 
 ---
 
-### 4.9. Dynamic RBAC & System Permissions (`/api/v1/roles`)
+### 4.8. Dynamic RBAC & System Permissions (`/api/v1/roles`)
 
 #### 45. Get System Roles
 - **Method**: `GET`
@@ -1964,7 +1911,7 @@ All API responses strictly utilize standardized envelopes matching the .NET spec
 
 ---
 
-### 4.10. Observability & System (`/health`, `/api-docs`, `/stats`)
+### 4.9. Observability & System (`/health`, `/api-docs`, `/stats`)
 
 #### 54. Health Check
 - **Method**: `GET`
