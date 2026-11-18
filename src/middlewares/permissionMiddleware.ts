@@ -207,6 +207,14 @@ export const checkPermission = (requiredPermission: string) => {
 
       // Support permission aliases between granular and group taxonomy
       const aliases = new Set<string>([requiredPermission]);
+      if (requiredPermission === 'Invitation.Respond') {
+        aliases.add('Invitation.Respond');
+        aliases.add('Invitation.View');
+        // Any authenticated user who received an invitation can respond to it.
+        // Domain ownership is strictly verified in respondToInvitationService:
+        // (invitation.invitedUserId === currentUserId)
+        return next();
+      }
       if (requiredPermission === 'Roles.View' || requiredPermission === 'Role.View') {
         aliases.add('Roles.View');
         aliases.add('Role.View');

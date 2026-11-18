@@ -124,18 +124,23 @@ All API responses strictly utilize standardized envelopes matching the .NET spec
 | `DELETE` | `/api/user/:id/monk-profile` | Users | Self (Monk) or `Users.Manage` | Monk, Admin |
 | `GET` | `/api/user/:id/settings` | Users | Self or `Users.View` | All (Self), Admin |
 | `PUT` | `/api/user/:id/settings` | Users | Self or `Users.Update` | All (Self), Admin |
-| `GET` | `/api/v1/spaces` | Spaces | Authenticated | All Space Members, Admin |
-| `POST` | `/api/v1/spaces` | Spaces | `Monastery.Create` | Monk, Admin |
-| `GET` | `/api/v1/spaces/:id` | Spaces | Authenticated | Space Members & Admin |
-| `PUT` | `/api/v1/spaces/:id` | Spaces | `Space.Update` | Space Owner, Space Admin |
-| `DELETE` | `/api/v1/spaces/:id` | Spaces | `Space.Delete` | Space Owner only |
-| `GET` | `/api/v1/spaces/roles` | Spaces | Authenticated | All Space Members |
-| `GET` | `/api/v1/spaces/roles/:id` | Spaces | Authenticated | All Space Members |
-| `GET` | `/api/v1/spaces/:id/members` | Spaces | `Space.View` | Space Members & Admin |
-| `POST` | `/api/v1/spaces/:id/invitations` | Spaces | `Space.Member.Invite` | Space Owner, Space Admin |
-| `POST` | `/api/v1/spaces/invitations/:invitationId/respond` | Spaces | Authenticated | Invitee (`Monk`, `Donor`) |
-| `PUT` | `/api/v1/spaces/:id/members/:userId` | Spaces | `Space.Role.Manage` | Space Owner, Space Admin |
-| `DELETE` | `/api/v1/spaces/:id/members/:userId` | Spaces | `Space.Member.Remove` | Space Owner, Space Admin |
+| `GET` | `/api/v1/monasteries` | Monasteries | None (`[AllowAnonymous]`) | Public, All Users |
+| `GET` | `/api/v1/monasteries/feed` | Monasteries | None (`[AllowAnonymous]`) | Public, Mobile Users |
+| `GET` | `/api/v1/monasteries/search` | Monasteries | None (`[AllowAnonymous]`) | Public, All Users |
+| `GET` | `/api/v1/monasteries/search/feed` | Monasteries | None (`[AllowAnonymous]`) | Public, Mobile Users |
+| `POST` | `/api/v1/monasteries` | Monasteries | `Monastery.Create` | Monk, Admin |
+| `GET` | `/api/v1/monasteries/mine` | Monasteries | Authenticated | Space Members & Admin |
+| `GET` | `/api/v1/monasteries/mine/feed` | Monasteries | Authenticated | Space Members & Admin |
+| `GET` | `/api/v1/monasteries/:id` | Monasteries | `Space.View` | Space Members & Admin |
+| `PATCH` | `/api/v1/monasteries/:id` | Monasteries | `Space.Update` | Space Owner, Space Admin |
+| `DELETE` | `/api/v1/monasteries/:id` | Monasteries | `Space.Delete` | Space Owner only |
+| `POST` | `/api/v1/monasteries/:id/invitations` | Monasteries | `Space.InviteMember` | Space Owner, Space Admin |
+| `POST` | `/api/v1/monasteries/invitations/:invitationId/respond` | Monasteries | `Invitation.Respond` | Invitee (`Monk`, `Donor`) |
+| `GET` | `/api/v1/monasteries/:id/members` | Monasteries | `Space.ViewMembers` | Space Members & Admin |
+| `PUT` | `/api/v1/monasteries/:id/members/:memberUserId/role` | Monasteries | `Space.UpdateMemberRole` | Space Owner, Space Admin |
+| `DELETE` | `/api/v1/monasteries/:id/members/:memberUserId` | Monasteries | `Space.RemoveMember` | Space Owner, Space Admin |
+| `GET` | `/api/v1/monasteries/:id/permissions` | Monasteries | Authenticated | Space Members & Admin |
+| `GET` | `/api/v1/monasteries/:id/roles` | Monasteries | Authenticated | Space Members & Admin |
 | `POST` | `/api/v1/donors/create` | Donors | Public / Optional | All |
 | `GET` | `/api/v1/donors` | Donors | Public / Optional | All |
 | `GET` | `/api/v1/donors/:id` | Donors | Public / Optional | All |
@@ -845,147 +850,260 @@ All API responses strictly utilize standardized envelopes matching the .NET spec
 
 ---
 
-### 4.3. Spaces / Monasteries Management (`/api/v1/spaces` & `/api/v1/monasteries`)
+### 4.3. Monastery Spaces & Memberships (`/api/v1/monasteries`)
 
-*(Note: `/api/v1/monasteries` is an exact alias mounted to the same router)*
-
-#### 14. List Monasteries / Spaces
+#### 16. Public Monastery Catalog Listing
 - **Method**: `GET`
-- **Route**: `/api/v1/spaces`
-- **Target User Role**: Authenticated Space Members, System Admin
-- **Description**: Returns paginated list of spaces that the calling user belongs to, or all spaces if called by a System Admin.
-- **Query Parameters (Offset Pagination)**:
-  - `page` (int, default: 1)
-  - `limit` (int, default: 10)
-  - `search` (string, optional)
+- **Route**: `/api/v1/monasteries`
+- **Target User Role**: Public (Devotees, Donors, Monks, Unauthenticated Users)
+- **Required Permission**: None (`[AllowAnonymous]`)
+- **Description**: Public catalog listing of active monasteries for donor discovery. Returns paginated results ordered ascending by name and ID by default.
+- **Query Parameters**:
+  - `pageNumber` (int, default: 1)
+  - `pageSize` (int, default: 10)
 - **Response `200 OK`**:
 ```json
 {
-  "success": true,
-  "message": "My monasteries retrieved successfully.",
-  "data": {
-    "monasteries": [
-      {
-        "id": 1,
-        "monasteryName": "Mahagandhayon Monastery",
-        "description": "Monastic education center",
-        "address": "Amarapura, Mandalay",
-        "createdById": 1,
-        "currentUserRoleId": 1,
-        "currentUserRoleName": "Space Admin",
-        "isOwner": true
-      }
-    ],
-    "pagination": {
-      "meta": {
-        "total": 1,
-        "currentPage": 1,
-        "lastPage": 1,
-        "perPage": 10
-      },
-      "links": {
-        "next": null,
-        "prev": null
-      }
+  "isSuccess": true,
+  "data": [
+    {
+      "id": 1,
+      "monasteryName": "Kyauk Gu Monastery",
+      "description": "Historical cave monastery",
+      "address": "Bagan, Mandalay Region",
+      "createdByName": "Ashin Pannita",
+      "membersCount": 6
+    },
+    {
+      "id": 2,
+      "monasteryName": "Mahagandhayon Monastery",
+      "description": "Center for Buddhist monastic education",
+      "address": "Amarapura, Mandalay",
+      "createdByName": "U Thuzana",
+      "membersCount": 12
     }
+  ],
+  "pagination": { "pageNumber": 1, "pageSize": 10, "totalCount": 2, "totalPages": 1, "hasPreviousPage": false, "hasNextPage": false }
+}
+```
+
+---
+
+#### 16b. Public Monastery Catalog Feed (Mobile Cursor)
+- **Method**: `GET`
+- **Route**: `/api/v1/monasteries/feed`
+- **Target User Role**: Public (Devotees, Donors, Monks, Mobile App Users)
+- **Required Permission**: None (`[AllowAnonymous]`)
+- **Description**: Dedicated cursor-based feed endpoint for mobile infinite scrolling of active monasteries.
+- **Query Parameters**:
+  - `lastId` (int, optional): ID of the last monastery from the previous page. Omit for the first page.
+  - `pageSize` (int, optional, default: 15): Number of items per batch.
+- **Response `200 OK`**:
+```json
+{
+  "isSuccess": true,
+  "message": "Monasteries feed retrieved successfully.",
+  "data": [
+    {
+      "id": 1,
+      "monasteryName": "Mahagandhayon Monastery",
+      "description": "Center for monastic studies",
+      "address": "Amarapura, Mandalay",
+      "createdById": 2
+    }
+  ],
+  "pagination": {
+    "nextCursor": 1,
+    "hasNextPage": true,
+    "pageSize": 15
   }
 }
 ```
 
 ---
 
-#### 15. Create Monastery Space
+#### 17. Search Public Monasteries
+- **Method**: `GET`
+- **Route**: `/api/v1/monasteries/search`
+- **Target User Role**: Public (Devotees, Donors, Monks, Unauthenticated Users)
+- **Required Permission**: None (`[AllowAnonymous]`)
+- **Description**: Dedicated keyword search across monastery names and physical addresses. Returns paginated matching results ordered ascending by name and ID.
+- **Query Parameters**:
+  - `keyword` (string, required query string)
+  - `pageNumber` (int, default: 1)
+  - `pageSize` (int, default: 10)
+- **Response `200 OK`**:
+```json
+{
+  "isSuccess": true,
+  "data": [
+    {
+      "id": 2,
+      "monasteryName": "Mahagandhayon Monastery",
+      "description": "Center for Buddhist monastic education",
+      "address": "Amarapura, Mandalay",
+      "createdByName": "U Thuzana",
+      "membersCount": 12
+    }
+  ],
+  "pagination": { "pageNumber": 1, "pageSize": 10, "totalCount": 1, "totalPages": 1, "hasPreviousPage": false, "hasNextPage": false }
+}
+```
+
+---
+
+#### 17b. Search Public Monasteries Feed (Mobile Cursor)
+- **Method**: `GET`
+- **Route**: `/api/v1/monasteries/search/feed`
+- **Target User Role**: Public (Devotees, Donors, Monks, Mobile App Users)
+- **Required Permission**: None (`[AllowAnonymous]`)
+- **Description**: Dedicated cursor-based keyword search feed endpoint for mobile infinite scrolling across monastery names and addresses.
+- **Query Parameters**:
+  - `keyword` (string, optional): Search keyword.
+  - `lastId` (int, optional): ID of the last monastery from the previous page.
+  - `pageSize` (int, optional, default: 15): Number of items per batch.
+- **Response `200 OK`**: Returns `CursorPagedResult<MonasterySpaceDto>` with `nextCursor` and `hasNextPage`.
+
+---
+
+#### 18. Create Monastery Space
 - **Method**: `POST`
-- **Route**: `/api/v1/spaces`
+- **Route**: `/api/v1/monasteries`
 - **Target User Role**: `Monk` or System Admin
 - **Required Permission**: `Monastery.Create`
-- **Description**: Creates a new monastery space and atomically assigns the creator as **Owner** (`isOwner: true`, `spaceRoleId: 1` / `Space Admin`) with full permissions.
+- **Description**: Provisions an isolated monastery space. The authenticated user is automatically enrolled as the space Owner (`SpaceRoleId = 1`, `IsOwner = true`).
 - **Request Body**:
 ```json
 {
   "monasteryName": "Mahagandhayon Monastery",
-  "description": "Historic monastery in Amarapura",
-  "address": "Amarapura, Mandalay"
+  "description": "Center for Buddhist monastic education",
+  "address": "Amarapura, Mandalay Division"
 }
 ```
 - **Response `201 Created`**:
 ```json
 {
-  "success": true,
+  "isSuccess": true,
   "message": "Monastery created successfully.",
+  "isFailure": false,
   "data": {
     "id": 1,
     "monasteryName": "Mahagandhayon Monastery",
-    "description": "Historic monastery in Amarapura",
-    "address": "Amarapura, Mandalay",
-    "createdById": 1,
+    "description": "Center for Buddhist monastic education",
+    "address": "Amarapura, Mandalay Division",
+    "createdById": 2,
     "currentUserRoleId": 1,
     "currentUserRoleName": "Space Admin",
-    "isOwner": true,
-    "permissions": [
-      "Space.View",
-      "Space.Update",
-      "Space.Delete",
-      "Space.Member.Invite",
-      "Space.Member.Manage",
-      "Space.Member.Remove",
-      "Space.Role.Manage",
-      "Space.Post.Create",
-      "Space.Donation.Create",
-      "Space.Donation.Review"
-    ]
+    "isOwner": true
   }
 }
 ```
 
 ---
 
-#### 16. Get Monastery Space Details
+#### 19. Get My Monasteries
 - **Method**: `GET`
-- **Route**: `/api/v1/spaces/:id`
-- **Target User Role**: Space Members, System Admin
-- **Description**: Returns space metadata, current user role in space, and ownership status.
+- **Route**: `/api/v1/monasteries/mine`
+- **Target User Role**: Any Space Member (`Monk`, `Admin`, `Editor`, `Viewer`)
+- **Description**: Returns all monastery spaces where the current user is an enrolled member or owner, using Offset-based pagination.
+- **Query Parameters**:
+  - `pageNumber` (int, default: 1)
+  - `pageSize` (int, default: 10)
+  - `search` (string, optional)
 - **Response `200 OK`**:
 ```json
 {
-  "success": true,
-  "message": "Monastery retrieved successfully.",
-  "data": {
-    "id": 1,
-    "monasteryName": "Mahagandhayon Monastery",
-    "description": "Historic monastery in Amarapura",
-    "address": "Amarapura, Mandalay",
-    "isOwner": true,
-    "currentUserRoleId": 1,
-    "currentUserRoleName": "Space Admin"
+  "isSuccess": true,
+  "message": "My monasteries retrieved successfully.",
+  "isFailure": false,
+  "data": [
+    {
+      "id": 1,
+      "monasteryName": "Mahagandhayon Monastery",
+      "description": "Center for Buddhist monastic education",
+      "address": "Amarapura, Mandalay Division",
+      "createdById": 2,
+      "currentUserRoleId": 1,
+      "currentUserRoleName": "Space Admin",
+      "isOwner": true
+    }
+  ],
+  "pagination": {
+    "pageNumber": 1,
+    "pageSize": 10,
+    "totalCount": 1,
+    "totalPages": 1,
+    "hasPreviousPage": false,
+    "hasNextPage": false
   }
 }
 ```
 
 ---
 
-#### 17. Update Monastery Space
-- **Method**: `PUT`
-- **Route**: `/api/v1/spaces/:id`
+#### 19b. Get My Monasteries Feed (Mobile Cursor)
+- **Method**: `GET`
+- **Route**: `/api/v1/monasteries/mine/feed`
+- **Target User Role**: Any Space Member (`Monk`, `Admin`, `Editor`, `Viewer`)
+- **Description**: Cursor-based infinite scrolling feed of monasteries where the current user is an enrolled member or owner.
+- **Query Parameters**:
+  - `lastId` (int, optional): ID of the last monastery from the previous page.
+  - `pageSize` (int, optional, default: 15): Number of items per batch.
+- **Response `200 OK`**: Returns `CursorPagedResult<MonasterySpaceDto>` with `nextCursor` and `hasNextPage`.
+
+---
+
+#### 20. Get Monastery Space Details
+- **Method**: `GET`
+- **Route**: `/api/v1/monasteries/{id}`
+- **Target User Role**: Space Members (`Owner`, `Admin`, `Editor`, `Viewer`)
+- **Required Space Permission**: `Space.View`
+- **Description**: Fetches metadata for a single space along with the caller's contextual role and ownership flag.
+- **Response `200 OK`**:
+```json
+{
+  "isSuccess": true,
+  "message": "Monastery retrieved successfully.",
+  "isFailure": false,
+  "data": {
+    "id": 1,
+    "monasteryName": "Mahagandhayon Monastery",
+    "description": "Center for Buddhist monastic education",
+    "address": "Amarapura, Mandalay Division",
+    "createdById": 2,
+    "currentUserRoleId": 1,
+    "currentUserRoleName": "Space Admin",
+    "isOwner": true
+  }
+}
+```
+
+---
+
+#### 21. Update Monastery Space
+- **Method**: `PATCH`
+- **Route**: `/api/v1/monasteries/{id}`
 - **Target User Role**: Space Owner, Space Admin
-- **Required Permission**: `Space.Update`
-- **Description**: Updates monastery name, description, and address.
+- **Required Space Permission**: `Space.Update`
+- **Description**: Updates the monastery space's name, description, and physical address.
 - **Request Body**:
 ```json
 {
-  "monasteryName": "Mahagandhayon Monastery (Main Campus)",
-  "description": "Expanded monastic campus",
+  "monasteryName": "Mahagandhayon Monastery (Main)",
+  "description": "Updated monastic campus description",
   "address": "Amarapura, Mandalay"
 }
 ```
 - **Response `200 OK`**:
 ```json
 {
-  "success": true,
+  "isSuccess": true,
   "message": "Monastery updated successfully.",
+  "isFailure": false,
   "data": {
     "id": 1,
-    "monasteryName": "Mahagandhayon Monastery (Main Campus)",
+    "monasteryName": "Mahagandhayon Monastery (Main)",
+    "description": "Updated monastic campus description",
     "address": "Amarapura, Mandalay"
   }
 }
@@ -993,152 +1111,124 @@ All API responses strictly utilize standardized envelopes matching the .NET spec
 
 ---
 
-#### 18. Delete Monastery Space
+#### 22. Delete Monastery Space
 - **Method**: `DELETE`
-- **Route**: `/api/v1/spaces/:id`
+- **Route**: `/api/v1/monasteries/{id}`
 - **Target User Role**: Space Owner only
-- **Required Permission**: `Space.Delete`
-- **Description**: Soft-deletes the space (`isDeleted = true`). Restricted strictly to the Space Owner.
+- **Required Space Permission**: `Space.Delete`
+- **Description**: Soft-deletes the monastery space (`IsDeleted = true`). Space admins cannot delete spaces; this action is reserved exclusively for the space owner.
 - **Response `200 OK`**:
 ```json
 {
-  "success": true,
-  "message": "Monastery deleted successfully."
+  "isSuccess": true,
+  "message": "Monastery deleted successfully.",
+  "isFailure": false
 }
 ```
 
 ---
 
-#### 19. List Space Roles Catalog
-- **Method**: `GET`
-- **Route**: `/api/v1/spaces/roles`
-- **Target User Role**: All Authenticated Users
-- **Description**: Returns all four standard space role definitions.
-- **Response `200 OK`**:
-```json
-{
-  "success": true,
-  "message": "Space roles retrieved successfully.",
-  "data": {
-    "roles": [
-      { "id": 1, "name": "Space Admin", "description": "Full control and administration" },
-      { "id": 2, "name": "Space Moderator", "description": "Moderate space activities and review donations" },
-      { "id": 3, "name": "Space Editor", "description": "Create posts and initiate donations" },
-      { "id": 4, "name": "Space Member", "description": "General space member" }
-    ]
-  }
-}
-```
-
----
-
-#### 20. Get Space Role by ID
-- **Method**: `GET`
-- **Route**: `/api/v1/spaces/roles/:id`
-- **Target User Role**: All Authenticated Users
-- **Description**: Returns single space role details and its mapped permissions.
-- **Response `200 OK`**:
-```json
-{
-  "success": true,
-  "message": "Space role retrieved successfully.",
-  "data": {
-    "id": 1,
-    "name": "Space Admin",
-    "description": "Full control and administration",
-    "permissions": ["Space.View", "Space.Update", "Space.Member.Invite", "Space.Role.Manage"]
-  }
-}
-```
-
----
-
-### 4.4. Space Members & Invitations (`/api/v1/spaces`)
-
-#### 21. List Space Members
-- **Method**: `GET`
-- **Route**: `/api/v1/spaces/:id/members`
-- **Target User Role**: Space Members, System Admin
-- **Required Permission**: `Space.View`
-- **Description**: Retrieves all enrolled users in the monastery space, their space roles, and ownership flags.
-- **Response `200 OK`**:
-```json
-{
-  "success": true,
-  "message": "Monastery members retrieved successfully.",
-  "data": [
-    {
-      "id": 1,
-      "userId": 1,
-      "name": "Ashin Pannita",
-      "phone": "09123456789",
-      "spaceRoleId": 1,
-      "spaceRoleName": "Space Admin",
-      "isOwner": true
-    }
-  ]
-}
-```
-
----
-
-#### 22. Invite Member to Space
+#### 23. Invite Member to Space
 - **Method**: `POST`
-- **Route**: `/api/v1/spaces/:id/invitations`
+- **Route**: `/api/v1/monasteries/{id}/invitations`
 - **Target User Role**: Space Owner, Space Admin
-- **Required Permission**: `Space.Member.Invite`
-- **Description**: Invites an existing registered user by `userId` or `phone` to join the space.
+- **Required Space Permission**: `Space.InviteMember`
+- **Description**: Invites an existing registered user by `UserId` or `PhoneNumber` to join the space with a selected space role (`Admin`, `Editor`, or `Viewer`). Dispatches an in-app & FCM push notification to the invitee.
 - **Request Body**:
 ```json
 {
-  "phone": "09987654321",
+  "phoneNumber": "09100000003",
   "spaceRoleId": 3
 }
 ```
 - **Response `201 Created`**:
 ```json
 {
-  "success": true,
+  "isSuccess": true,
   "message": "Member invited successfully.",
+  "isFailure": false,
   "data": {
     "invitationId": 1,
     "monasterySpaceId": 1,
-    "invitedUserId": 2,
+    "invitedUserId": 3,
     "spaceRoleId": 3,
-    "status": 0
+    "status": 1
   }
 }
 ```
 
 ---
 
-#### 23. Respond to Space Invitation
+#### 24. Respond to Space Invitation
 - **Method**: `POST`
-- **Route**: `/api/v1/spaces/invitations/:invitationId/respond`
-- **Target User Role**: The Invited User
-- **Description**: Accepts (`status: 1` / `"accept"`) or rejects (`status: 0` / `"reject"`) an invitation. On acceptance, immediately enrolls the user as a `MonasteryMember`.
+- **Route**: `/api/v1/monasteries/invitations/{invitationId}/respond`
+- **Target User Role**: The invited user
+- **Required Permission**: `Invitation.Respond`
+- **Description**: Accepts (`Status = 2` / Accepted) or rejects (`Status = 3` / Rejected) an invitation. Upon acceptance, the user is immediately enrolled as an active `MonasteryMember` with the specified role.
 - **Request Body**:
 ```json
 {
-  "status": 1
+  "status": 2
 }
 ```
 - **Response `200 OK`**:
 ```json
 {
-  "success": true,
-  "message": "Invitation accepted successfully."
+  "isSuccess": true,
+  "message": "Invitation accepted successfully.",
+  "isFailure": false
 }
 ```
 
 ---
 
-#### 24. Update Member Role in Space
+#### 25. List Space Members
+- **Method**: `GET`
+- **Route**: `/api/v1/monasteries/{id}/members`
+- **Target User Role**: All Space Members (`Owner`, `Admin`, `Editor`, `Viewer`)
+- **Required Space Permission**: `Space.ViewMembers`
+- **Description**: Retrieves a paginated list of all enrolled users in the monastery space.
+- **Query Parameters**:
+  - `pageNumber` (int, default: 1)
+  - `pageSize` (int, default: 10)
+- **Response `200 OK`**:
+```json
+{
+  "isSuccess": true,
+  "message": "Members retrieved successfully.",
+  "isFailure": false,
+  "data": [
+    {
+      "id": 1,
+      "userId": 2,
+      "name": "Ashin Pannita",
+      "phoneNumber": "09100000002",
+      "phone": "09100000002",
+      "email": "ashin.pannita@monastery.org",
+      "spaceRoleId": 1,
+      "spaceRoleName": "Space Admin",
+      "isOwner": true
+    }
+  ],
+  "pagination": {
+    "pageNumber": 1,
+    "pageSize": 10,
+    "totalCount": 1,
+    "totalPages": 1,
+    "hasPreviousPage": false,
+    "hasNextPage": false
+  }
+}
+```
+
+---
+
+#### 26. Update Space Member Role
 - **Method**: `PUT`
-- **Route**: `/api/v1/spaces/:id/members/:userId`
+- **Route**: `/api/v1/monasteries/{id}/members/{memberUserId}/role`
 - **Target User Role**: Space Owner, Space Admin
-- **Required Permission**: `Space.Role.Manage`
-- **Description**: Modifies the space role of an existing member. Space Admins cannot alter the space Owner's role.
+- **Required Space Permission**: `Space.UpdateMemberRole`
+- **Description**: Modifies the role assigned to a member. Space Admins cannot alter the space Owner's role.
 - **Request Body**:
 ```json
 {
@@ -1148,10 +1238,11 @@ All API responses strictly utilize standardized envelopes matching the .NET spec
 - **Response `200 OK`**:
 ```json
 {
-  "success": true,
+  "isSuccess": true,
   "message": "Member role updated successfully.",
+  "isFailure": false,
   "data": {
-    "userId": 2,
+    "userId": 3,
     "spaceRoleId": 2,
     "spaceRoleName": "Space Moderator"
   }
@@ -1160,23 +1251,84 @@ All API responses strictly utilize standardized envelopes matching the .NET spec
 
 ---
 
-#### 25. Remove Member from Space
+#### 27. Remove Member from Space
 - **Method**: `DELETE`
-- **Route**: `/api/v1/spaces/:id/members/:userId`
+- **Route**: `/api/v1/monasteries/{id}/members/{memberUserId}`
 - **Target User Role**: Space Owner, Space Admin
-- **Required Permission**: `Space.Member.Remove`
-- **Description**: Removes a member from the space. The space owner cannot be removed.
+- **Required Space Permission**: `Space.RemoveMember`
+- **Description**: Disassociates a member from the monastery space. The space owner cannot be removed.
 - **Response `200 OK`**:
 ```json
 {
-  "success": true,
-  "message": "Member removed successfully."
+  "isSuccess": true,
+  "message": "Member removed successfully.",
+  "isFailure": false
 }
 ```
 
 ---
 
-### 4.5. Donors Directory (`/api/v1/donors`)
+#### 27a. Get Current User's Space Permissions
+- **Method**: `GET`
+- **Route**: `/api/v1/monasteries/{id}/permissions`
+- **Target User Role**: Space Members, System Admin
+- **Required Permission**: Authenticated Space Member or System Admin
+- **Description**: Retrieves the active space permissions granted to the calling user inside the specified monastery space. If the caller is the Space Owner or a System Admin, all active space permissions are returned.
+- **Response `200 OK`**:
+```json
+{
+  "isSuccess": true,
+  "message": "Permissions retrieved successfully.",
+  "isFailure": false,
+  "data": [
+    {
+      "id": 1,
+      "name": "Space.View",
+      "description": "View monastery details"
+    },
+    {
+      "id": 2,
+      "name": "Donation.Create",
+      "description": "Submit donation requests"
+    }
+  ]
+}
+```
+
+---
+
+#### 27b. Get Available Monastery Space Roles
+- **Method**: `GET`
+- **Route**: `/api/v1/monasteries/{id}/roles`
+- **Target User Role**: Space Members, System Admin
+- **Required Permission**: Authenticated Space Member or System Admin
+- **Description**: Retrieves all assignable space roles along with their configured permissions for this monastery space.
+- **Response `200 OK`**:
+```json
+{
+  "isSuccess": true,
+  "message": "Roles retrieved successfully.",
+  "isFailure": false,
+  "data": [
+    {
+      "id": 1,
+      "name": "Owner",
+      "description": "Space creator with full administrative authority",
+      "permissions": []
+    },
+    {
+      "id": 2,
+      "name": "Admin",
+      "description": "Monastery trustee/manager",
+      "permissions": []
+    }
+  ]
+}
+```
+
+---
+
+### 4.4. Donors Directory (`/api/v1/donors`)
 
 #### 26. Create Donor Contact
 - **Method**: `POST`
@@ -1301,7 +1453,7 @@ All API responses strictly utilize standardized envelopes matching the .NET spec
 
 ---
 
-### 4.6. Donations Management (`/api/v1/donations`)
+### 4.5. Donations Management (`/api/v1/donations`)
 
 *Domain Enums:*
 * **`DonationStatus`**: `0 = Draft`, `1 = Submitted`, `2 = PendingReview`, `3 = Accepted`, `4 = Scheduled`, `5 = Completed`, `6 = Rejected`, `7 = Cancelled`
@@ -1677,7 +1829,7 @@ All API responses strictly utilize standardized envelopes matching the .NET spec
 
 ---
 
-### 4.7. Donation Calendar Aggregation (`/api/v1/donations/calendar`)
+### 4.6. Donation Calendar Aggregation (`/api/v1/donations/calendar`)
 
 #### 44. Get Donation Calendar
 - **Method**: `GET`
@@ -1713,7 +1865,7 @@ All API responses strictly utilize standardized envelopes matching the .NET spec
 
 ---
 
-### 4.8. Dynamic RBAC & System Permissions (`/api/v1/roles`)
+### 4.7. Dynamic RBAC & System Permissions (`/api/v1/roles`)
 
 #### 45. Get System Roles
 - **Method**: `GET`
@@ -1911,7 +2063,7 @@ All API responses strictly utilize standardized envelopes matching the .NET spec
 
 ---
 
-### 4.9. Observability & System (`/health`, `/api-docs`, `/stats`)
+### 4.8. Observability & System (`/health`, `/api-docs`, `/stats`)
 
 #### 54. Health Check
 - **Method**: `GET`

@@ -229,6 +229,7 @@ export async function seedRbac() {
     'Monastery.Delete',
     'Monastery.ManageMembers',
     'Invitation.View',
+    'Invitation.Respond',
     'Notification.View',
     'Notification.Manage',
     ...DONATION_PERMISSIONS,
@@ -242,6 +243,7 @@ export async function seedRbac() {
     'Donation.Create',
     'Donation.Cancel',
     'Invitation.View',
+    'Invitation.Respond',
     'Notification.View',
     'Notification.Manage',
   ]);

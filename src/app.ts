@@ -48,7 +48,6 @@ app.use(httpLogger);
 // Routes
 app.use('/api/v1/user', userRouter);
 app.use('/api/v1/monasteries', spaceRouter);
-app.use('/api/v1/spaces', spaceRouter);
 app.use('/api/v1/roles', roleRouter);
 app.use('/api/v1/permissions', permissionRouter);
 app.use('/api/v1/space-roles', spaceRoleRouter);
