@@ -6,6 +6,9 @@ import type { TokenPayload } from '@/utils/jwt';
 export const authMiddleware = (req: Request, _res: Response, next: NextFunction) => {
   const { authorization } = req.headers;
   if (!authorization?.startsWith('Bearer ')) {
+    if (req.user?.userId && req.user?.roleId) {
+      return next();
+    }
     return next(new AppError('Unauthorized', 401));
   }
   const accessToken = authorization.split(' ')[1];

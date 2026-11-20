@@ -6,7 +6,7 @@ import {
   donationDate,
   localDate,
   localTime,
-} from '@/modules/donation-calendar/calendar.time';
+} from '@/modules/donation/calendar.time';
 import { logger } from '@/utils/logger';
 
 // Invitation already uses 1. These values are reserved for this module.

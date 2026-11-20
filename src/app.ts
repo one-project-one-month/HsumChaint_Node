@@ -10,8 +10,6 @@ import { globalErrorHandler } from './middlewares/errorHandler';
 import { httpLogger } from './middlewares/httpLogger';
 import authRoutes from './modules/auth/auth.routes';
 import { donationRouter } from './modules/donation/donation.routes';
-import { donationCalendarRouter } from './modules/donation-calendar/calendar.routes';
-import { donorRouter } from './modules/donor/donor.routes';
 import healthRoutes from './modules/health/health.routes';
 import { notificationRouter } from './modules/notification/notification.routes';
 import permissionRouter from './modules/permission/permission.routes';
@@ -53,10 +51,8 @@ app.use('/api/v1/permissions', permissionRouter);
 app.use('/api/v1/space-roles', spaceRoleRouter);
 app.use('/api/v1/space-permissions', spacePermissionRouter);
 app.use('/api/v1/auth', authRoutes);
-app.use('/api/v1/donors', donorRouter);
 app.use('/api/v1/notifications', notificationRouter);
 app.use('/api/v1/donations', donationRouter);
-app.use('/api/v1/donations', donationCalendarRouter);
 
 // Health check
 app.get('/health', (_, res) => {

@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { dateStart, donationDate, localDate, localTime } from './calendar.time';
+import { dateStart, donationDate, localDate, localTime } from '../calendar.time';
 
 test('Myanmar calendar day changes at 17:30 UTC', () => {
   expect(localDate(new Date('2026-10-21T17:29:59Z'))).toBe('2026-10-21');

@@ -2,7 +2,6 @@ import { Router } from 'express';
 import { authMiddleware } from '@/middlewares/authMiddleWare';
 import { checkPermission, requireSpacePermission } from '@/middlewares/permissionMiddleware';
 import { validator } from '@/middlewares/validator';
-import { createSpaceDonationRouter } from '@/modules/donation/donation.routes';
 import {
   createSpace,
   deleteSpace,
@@ -145,9 +144,6 @@ router.get('/:id/permissions', validator(spaceIdParamSchema), getSpacePermission
 
 // Get Available Monastery Space Roles
 router.get('/:id/roles', validator(spaceIdParamSchema), getSpaceRoles);
-
-// Space Donations sub-router
-router.use('/:spaceId/donations', createSpaceDonationRouter());
 
 export { router as spaceRouter };
 export default router;
