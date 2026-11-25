@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/prisma';
 import { clearRolePermissionsCache } from '@/middlewares/permissionMiddleware';
 import { AppError } from '@/utils/AppError';
+import type { PaginationMeta } from '@/utils/response';
 import {
   ensureSystemPermissionsInDb,
   type FormattedPermission,
@@ -93,13 +94,15 @@ const mapRoleToDto = (
  * Generic listing/pagination operation for roles (ordered ascending by default)
  */
 export const getRolesOnlyService = async (pageNumber = 1, pageSize = 10) => {
-  const skip = (pageNumber - 1) * pageSize;
+  const numPage = Number(pageNumber) || 1;
+  const numLimit = Number(pageSize) || 10;
+  const skip = (numPage - 1) * numLimit;
 
   const [roles, totalCount] = await Promise.all([
     prisma.role.findMany({
       where: { isDeleted: false },
       skip,
-      take: pageSize,
+      take: numLimit,
       orderBy: { id: 'asc' },
       include: {
         rolePermissions: {
@@ -113,16 +116,26 @@ export const getRolesOnlyService = async (pageNumber = 1, pageSize = 10) => {
   ]);
 
   const items = roles.map((r) => mapRoleToDto(r, r.rolePermissions));
+  const totalPages = Math.ceil(totalCount / numLimit) || 1;
+  const pagination: PaginationMeta = {
+    pageNumber: numPage,
+    pageSize: numLimit,
+    totalCount,
+    totalPages,
+    hasPreviousPage: numPage > 1,
+    hasNextPage: numPage < totalPages,
+  };
 
   return {
     items,
+    pagination,
     totalCount,
-    pageNumber,
-    pageSize,
-    totalPages: Math.ceil(totalCount / pageSize) || 1,
+    pageNumber: numPage,
+    pageSize: numLimit,
+    totalPages,
     total: totalCount,
-    page: pageNumber,
-    limit: pageSize,
+    page: numPage,
+    limit: numLimit,
   };
 };
 
@@ -130,7 +143,9 @@ export const getRolesOnlyService = async (pageNumber = 1, pageSize = 10) => {
  * Keyword search operation for roles
  */
 export const searchRolesService = async (pageNumber = 1, pageSize = 10, keyword: string) => {
-  const skip = (pageNumber - 1) * pageSize;
+  const numPage = Number(pageNumber) || 1;
+  const numLimit = Number(pageSize) || 10;
+  const skip = (numPage - 1) * numLimit;
   const trimmed = keyword.trim();
 
   const whereClause = {
@@ -142,7 +157,7 @@ export const searchRolesService = async (pageNumber = 1, pageSize = 10, keyword:
     prisma.role.findMany({
       where: whereClause,
       skip,
-      take: pageSize,
+      take: numLimit,
       orderBy: { id: 'asc' },
       include: {
         rolePermissions: {
@@ -156,16 +171,26 @@ export const searchRolesService = async (pageNumber = 1, pageSize = 10, keyword:
   ]);
 
   const items = roles.map((r) => mapRoleToDto(r, r.rolePermissions));
+  const totalPages = Math.ceil(totalCount / numLimit) || 1;
+  const pagination: PaginationMeta = {
+    pageNumber: numPage,
+    pageSize: numLimit,
+    totalCount,
+    totalPages,
+    hasPreviousPage: numPage > 1,
+    hasNextPage: numPage < totalPages,
+  };
 
   return {
     items,
+    pagination,
     totalCount,
-    pageNumber,
-    pageSize,
-    totalPages: Math.ceil(totalCount / pageSize) || 1,
+    pageNumber: numPage,
+    pageSize: numLimit,
+    totalPages,
     total: totalCount,
-    page: pageNumber,
-    limit: pageSize,
+    page: numPage,
+    limit: numLimit,
   };
 };
 
@@ -175,9 +200,9 @@ export const searchRolesService = async (pageNumber = 1, pageSize = 10, keyword:
 export const getRolesService = async (
   query: GetRolesQueryInput = { pageNumber: 1, pageSize: 10 }
 ) => {
-  const pageNumber = query.pageNumber ?? query.page ?? 1;
-  const pageSize = query.pageSize ?? query.limit ?? 10;
-  const search = query.roleName ?? query.search;
+  const pageNumber = Number(query?.pageNumber ?? query?.page) || 1;
+  const pageSize = Number(query?.pageSize ?? query?.limit) || 10;
+  const search = query?.roleName ?? query?.search;
 
   if (search && search.trim().length > 0) {
     return searchRolesService(pageNumber, pageSize, search.trim());

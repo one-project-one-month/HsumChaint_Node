@@ -1,25 +1,31 @@
 // HsumChaint.Shared/CommonEnum/{DonationStatus,DonationType}.cs
 export const DONATION_STATUS = {
-  PendingReview: 0,
-  Accepted: 1,
-  Scheduled: 2,
-  Completed: 3,
-  Rejected: 4,
-  Cancelled: 5,
+  PendingReview: 1,
+  Accepted: 2,
+  Rejected: 3,
+  Scheduled: 4,
+  Completed: 5,
+  Cancelled: 6,
 } as const;
 
 export type DonationStatusName = keyof typeof DONATION_STATUS;
 export type DonationStatusCode = (typeof DONATION_STATUS)[DonationStatusName];
 export type DonationStatus = DonationStatusName;
 
-export const DONATION_STATUS_METADATA = [
-  { id: 0, name: 'PendingReview', label: 'Pending Review' },
-  { id: 1, name: 'Accepted', label: 'Accepted' },
-  { id: 2, name: 'Scheduled', label: 'Scheduled' },
-  { id: 3, name: 'Completed', label: 'Completed' },
-  { id: 4, name: 'Rejected', label: 'Rejected' },
-  { id: 5, name: 'Cancelled', label: 'Cancelled' },
-] as const;
+export interface DonationStatusItemDto {
+  id: number;
+  name: string;
+  label: string;
+}
+
+export const DONATION_STATUS_CATALOG: DonationStatusItemDto[] = [
+  { id: 1, name: 'PendingReview', label: 'Pending Review' },
+  { id: 2, name: 'Accepted', label: 'Accepted' },
+  { id: 3, name: 'Rejected', label: 'Rejected' },
+  { id: 4, name: 'Scheduled', label: 'Scheduled' },
+  { id: 5, name: 'Completed', label: 'Completed' },
+  { id: 6, name: 'Cancelled', label: 'Cancelled' },
+];
 
 export const DONATION_TYPE = {
   Money: 0,
@@ -55,8 +61,8 @@ export interface DonationDto {
   donationType: number;
   customDonationType: string | null;
   note: string | null;
-  amount: number | string | null;
-  quantity: number | string | null;
+  amount: string | null;
+  quantity: string | null;
   status: number;
   reviewerId: number | null;
   createdAt: Date;
@@ -91,12 +97,12 @@ export interface PaginatedDonationsDto {
     pageNumber: number;
     pageSize: number;
     totalPages: number;
-    hasPreviousPage?: boolean;
-    hasNextPage?: boolean;
+    hasPreviousPage: boolean;
+    hasNextPage: boolean;
   };
 }
 
-export interface CursorPaginatedDonationsDto {
+export interface CursorPagedDonationsDto {
   items: DonationDto[];
   pagination: {
     nextCursor: number | null;

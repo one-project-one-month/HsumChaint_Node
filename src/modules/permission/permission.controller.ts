@@ -11,30 +11,13 @@ import { getPermissionsService } from './permission.service';
  */
 export const getPermissions = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const rawQuery = req.query as Record<string, string>;
-    const pageNumber = Number(rawQuery.pageNumber || rawQuery.page) || 1;
-    const pageSize = Number(rawQuery.pageSize || rawQuery.limit) || 20;
-
-    const queryData: GetPermissionsQueryInput = {
-      pageNumber,
-      pageSize,
-      search: rawQuery.search,
-      module: rawQuery.module,
-    };
-
-    const result = await getPermissionsService(queryData);
+    const query = req.query as unknown as GetPermissionsQueryInput;
+    const result = await getPermissionsService(query);
 
     return sendPaginatedResponse(
       res,
       result.items,
-      {
-        pageNumber: result.pageNumber,
-        pageSize: result.pageSize,
-        totalCount: result.totalCount,
-        totalPages: result.totalPages,
-        hasPreviousPage: result.pageNumber > 1,
-        hasNextPage: result.pageNumber < result.totalPages,
-      },
+      result.pagination,
       'System permissions retrieved successfully.'
     );
   } catch (err) {

@@ -11,29 +11,13 @@ import { getSpacePermissionsService } from './space-permission.service';
  */
 export const getSpacePermissions = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const rawQuery = req.query as Record<string, string>;
-    const pageNumber = Number(rawQuery.pageNumber || rawQuery.page) || 1;
-    const pageSize = Number(rawQuery.pageSize || rawQuery.limit) || 10;
-
-    const queryData: GetSpacePermissionsQueryInput = {
-      pageNumber,
-      pageSize,
-      search: rawQuery.search,
-    };
-
-    const result = await getSpacePermissionsService(queryData);
+    const query = req.query as unknown as GetSpacePermissionsQueryInput;
+    const result = await getSpacePermissionsService(query);
 
     return sendPaginatedResponse(
       res,
       result.items,
-      {
-        pageNumber: result.pageNumber,
-        pageSize: result.pageSize,
-        totalCount: result.totalCount,
-        totalPages: result.totalPages,
-        hasPreviousPage: result.pageNumber > 1,
-        hasNextPage: result.pageNumber < result.totalPages,
-      },
+      result.pagination,
       'Space permissions retrieved successfully.'
     );
   } catch (err) {

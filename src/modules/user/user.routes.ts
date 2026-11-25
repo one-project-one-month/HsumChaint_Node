@@ -36,51 +36,51 @@ const router = Router();
 router.use(authMiddleware);
 
 // --- Core User Routes ---
-router.get('/', validator(getAllUsersSchema), checkPermission('User.View'), getAllUsers);
+router.get('/', validator(getAllUsersSchema), checkPermission('Users.View'), getAllUsers);
 router.get('/me', getMe);
-router.get('/:id', validator(idParamSchema), checkSelfOrPermission('User.View'), getUserById);
+router.get('/:id', validator(idParamSchema), checkSelfOrPermission('Users.View'), getUserById);
 
-// Supports both PUT / (body id) and PUT /:id (url param id)
+// Supports both PUT / (body id) per C# spec and PUT /:id per REST
 router.put(
   '/',
   upload.single('avatar'),
   validator(updateUserSchema),
-  checkSelfOrPermission('User.Update'),
+  checkSelfOrPermission('Users.Update'),
   updateUser
 );
 router.put(
   '/:id',
   upload.single('avatar'),
   validator(updateUserSchema),
-  checkSelfOrPermission('User.Update'),
+  checkSelfOrPermission('Users.Update'),
   updateUser
 );
 
-router.delete('/:id', validator(idParamSchema), checkSelfOrPermission('User.Delete'), deleteUser);
+router.delete('/:id', validator(idParamSchema), checkPermission('Users.Manage'), deleteUser);
 
 // --- Monk Profile Sub-Resource ---
 router.get(
   '/:id/monk-profile',
   validator(idParamSchema),
-  checkSelfOrPermission('User.View'),
+  checkSelfOrPermission('Users.View'),
   getMonkProfile
 );
 router.patch(
   '/:id/monk-profile',
   validator(updateMonkProfileSchema),
-  checkSelfOrPermission('User.Update'),
+  checkSelfOrPermission('Users.Update'),
   updateMonkProfile
 );
 router.put(
   '/:id/monk-profile',
   validator(updateMonkProfileSchema),
-  checkSelfOrPermission('User.Update'),
+  checkSelfOrPermission('Users.Update'),
   updateMonkProfile
 );
 router.delete(
   '/:id/monk-profile',
   validator(idParamSchema),
-  checkSelfOrPermission('User.Manage'),
+  checkSelfOrPermission('Users.Manage'),
   deleteMonkProfile
 );
 
@@ -134,13 +134,13 @@ router.delete(
 router.get(
   '/:id/settings',
   validator(idParamSchema),
-  checkSelfOrPermission('User.View'),
+  checkSelfOrPermission('Users.View'),
   getUserSettings
 );
 router.put(
   '/:id/settings',
   validator(updateUserSettingsSchema),
-  checkSelfOrPermission('User.Update'),
+  checkSelfOrPermission('Users.Update'),
   updateUserSettings
 );
 

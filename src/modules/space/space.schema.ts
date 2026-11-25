@@ -1,18 +1,64 @@
 import { z } from 'zod';
 import { PaginationQuerySchema } from '@/helper/paginationSchema';
 
+// --- Parameter Schemas ---
+export const spaceIdParamSchema = z.object({
+  params: z.object({
+    id: z.coerce.number().int().positive('Invalid space ID'),
+  }),
+});
+
+// --- 16 & 19. Offset Catalog & My Monasteries Pagination ---
+export const catalogPaginationSchema = z.object({
+  query: z.object({
+    pageNumber: z.coerce.number().int().positive().optional().default(1),
+    pageSize: z.coerce.number().int().positive().max(100).optional().default(10),
+    page: z.coerce.number().int().positive().optional(),
+    limit: z.coerce.number().int().positive().max(100).optional(),
+    search: z.string().trim().optional(),
+  }),
+});
+
+// --- 16b & 19b. Mobile Cursor Feeds ---
+export const cursorFeedSchema = z.object({
+  query: z.object({
+    lastId: z.coerce.number().int().nonnegative().optional(),
+    pageSize: z.coerce.number().int().positive().max(100).optional().default(15),
+    limit: z.coerce.number().int().positive().max(100).optional(),
+  }),
+});
+
+// --- 17. Search Public Monasteries ---
+export const searchMonasteriesSchema = z.object({
+  query: z.object({
+    keyword: z.string().trim().optional().default(''),
+    pageNumber: z.coerce.number().int().positive().optional().default(1),
+    pageSize: z.coerce.number().int().positive().max(100).optional().default(10),
+    page: z.coerce.number().int().positive().optional(),
+    limit: z.coerce.number().int().positive().max(100).optional(),
+  }),
+});
+
+// --- 17b. Search Public Monasteries Feed (Mobile Cursor) ---
+export const searchFeedSchema = z.object({
+  query: z.object({
+    keyword: z.string().trim().optional().default(''),
+    lastId: z.coerce.number().int().nonnegative().optional(),
+    pageSize: z.coerce.number().int().positive().max(100).optional().default(15),
+    limit: z.coerce.number().int().positive().max(100).optional(),
+  }),
+});
+
+// --- 18. Create Monastery Space ---
 export const createSpaceSchema = z.object({
   body: z.object({
-    monasteryName: z
-      .string('Monastery name is required.')
-      .trim()
-      .min(1, 'Monastery name is required.')
-      .max(255),
+    monasteryName: z.string().trim().min(1, 'Monastery name is required.').max(255),
     description: z.string().trim().max(1000).optional(),
     address: z.string().trim().max(500).optional(),
   }),
 });
 
+// --- 21. Update Monastery Space ---
 export const updateSpaceSchema = z.object({
   params: z.object({
     id: z.coerce.number().int().positive('Invalid space ID'),
@@ -24,69 +70,7 @@ export const updateSpaceSchema = z.object({
   }),
 });
 
-export const spaceIdParamSchema = z.object({
-  params: z.object({
-    id: z.coerce.number().int().positive('Invalid space ID'),
-  }),
-});
-
-export const catalogPaginationSchema = z.object({
-  query: z.object({
-    pageNumber: z.coerce.number().int().positive().optional().default(1),
-    pageSize: z.coerce.number().int().positive().max(100).optional().default(10),
-    page: z.coerce.number().int().positive().optional(),
-    limit: z.coerce.number().int().positive().max(100).optional(),
-    search: z.string().trim().optional(),
-  }),
-});
-
-export const cursorFeedSchema = z.object({
-  query: z.object({
-    lastId: z.coerce.number().int().nonnegative().optional(),
-    pageSize: z.coerce.number().int().positive().max(100).optional().default(15),
-    limit: z.coerce.number().int().positive().max(100).optional(),
-  }),
-});
-
-export const searchMonasteriesSchema = z.object({
-  query: z.object({
-    keyword: z.string().trim().optional().default(''),
-    pageNumber: z.coerce.number().int().positive().optional().default(1),
-    pageSize: z.coerce.number().int().positive().max(100).optional().default(10),
-    page: z.coerce.number().int().positive().optional(),
-    limit: z.coerce.number().int().positive().max(100).optional(),
-  }),
-});
-
-export const searchFeedSchema = z.object({
-  query: z.object({
-    keyword: z.string().trim().optional().default(''),
-    lastId: z.coerce.number().int().nonnegative().optional(),
-    pageSize: z.coerce.number().int().positive().max(100).optional().default(15),
-    limit: z.coerce.number().int().positive().max(100).optional(),
-  }),
-});
-
-export const membersPaginationSchema = z.object({
-  params: z.object({
-    id: z.coerce.number().int().positive('Invalid space ID'),
-  }),
-  query: z.object({
-    pageNumber: z.coerce.number().int().positive().optional().default(1),
-    pageSize: z.coerce.number().int().positive().max(100).optional().default(10),
-    page: z.coerce.number().int().positive().optional(),
-    limit: z.coerce.number().int().positive().max(100).optional(),
-  }),
-});
-
-export const spacePaginationSchema = z.object({
-  query: PaginationQuerySchema.extend({
-    search: z.string().trim().optional(),
-    pageNumber: z.coerce.number().int().positive().optional(),
-    pageSize: z.coerce.number().int().positive().max(100).optional(),
-  }),
-});
-
+// --- 23. Invite Member to Space ---
 export const inviteMemberSchema = z.object({
   params: z.object({
     id: z.coerce.number().int().positive('Invalid space ID'),
@@ -109,24 +93,60 @@ export const inviteMemberSchema = z.object({
     }),
 });
 
+// --- 24. Respond to Space Invitation ---
 export const respondInvitationSchema = z.object({
   params: z.object({
     invitationId: z.coerce.number().int().positive('Invalid invitation ID'),
   }),
   body: z.object({
     status: z
-      .union([z.boolean(), z.number(), z.enum(['accept', 'reject', 'Accept', 'Reject'])])
+      .union([
+        z.boolean(),
+        z.number(),
+        z.enum([
+          'accept',
+          'reject',
+          'Accept',
+          'Reject',
+          'accepted',
+          'rejected',
+          'Accepted',
+          'Rejected',
+        ]),
+      ])
       .transform((val): 2 | 3 => {
-        // 2 / 1 / true / 'accept' -> 2 (Accept)
-        if (val === 2 || val === 1 || val === true || val === 'accept' || val === 'Accept') {
+        // 2 / 1 / true / 'accept' / 'Accepted' -> 2 (Accept)
+        if (
+          val === 2 ||
+          val === 1 ||
+          val === true ||
+          val === 'accept' ||
+          val === 'Accept' ||
+          val === 'accepted' ||
+          val === 'Accepted'
+        ) {
           return 2;
         }
-        // 3 / 0 / false / 'reject' -> 3 (Reject)
+        // 3 / 0 / false / 'reject' / 'Rejected' -> 3 (Reject)
         return 3;
       }),
   }),
 });
 
+// --- 25. Members Pagination ---
+export const membersPaginationSchema = z.object({
+  params: z.object({
+    id: z.coerce.number().int().positive('Invalid space ID'),
+  }),
+  query: z.object({
+    pageNumber: z.coerce.number().int().positive().optional().default(1),
+    pageSize: z.coerce.number().int().positive().max(100).optional().default(10),
+    page: z.coerce.number().int().positive().optional(),
+    limit: z.coerce.number().int().positive().max(100).optional(),
+  }),
+});
+
+// --- 26. Update Space Member Role ---
 export const updateMemberRoleSchema = z.object({
   params: z
     .object({
@@ -149,6 +169,7 @@ export const updateMemberRoleSchema = z.object({
     }),
 });
 
+// --- 27. Remove Member from Space ---
 export const removeMemberSchema = z.object({
   params: z
     .object({
@@ -162,8 +183,22 @@ export const removeMemberSchema = z.object({
     }),
 });
 
+export const spacePaginationSchema = z.object({
+  query: PaginationQuerySchema.extend({
+    search: z.string().trim().optional(),
+    pageNumber: z.coerce.number().int().positive().optional(),
+    pageSize: z.coerce.number().int().positive().max(100).optional(),
+  }),
+});
+
+// --- Inferred Input Types ---
 export type CreateSpaceInput = z.infer<typeof createSpaceSchema>['body'];
 export type UpdateSpaceInput = z.infer<typeof updateSpaceSchema>['body'];
 export type InviteMemberInput = z.infer<typeof inviteMemberSchema>['body'];
 export type RespondInvitationInput = z.infer<typeof respondInvitationSchema>['body'];
 export type UpdateMemberRoleInput = z.infer<typeof updateMemberRoleSchema>['body'];
+export type CatalogPaginationInput = z.infer<typeof catalogPaginationSchema>['query'];
+export type CursorFeedInput = z.infer<typeof cursorFeedSchema>['query'];
+export type SearchMonasteriesInput = z.infer<typeof searchMonasteriesSchema>['query'];
+export type SearchFeedInput = z.infer<typeof searchFeedSchema>['query'];
+export type MembersPaginationInput = z.infer<typeof membersPaginationSchema>['query'];

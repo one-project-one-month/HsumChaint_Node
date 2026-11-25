@@ -5,7 +5,7 @@ import { getSpaceRolePermissions } from '@/middlewares/permissionMiddleware';
 import { AppError } from '@/utils/AppError';
 import { logger } from '@/utils/logger';
 import { type FormattedPermission, formatPermission } from '../role/role.service';
-import { SPACE_PERMISSIONS, SPACE_ROLE_NAMES, SPACE_ROLES } from './space.permissions';
+import { SPACE_PERMISSIONS, SPACE_ROLES } from './space.permissions';
 import type {
   CreateSpaceInput,
   InviteMemberInput,
@@ -88,6 +88,8 @@ export interface MonasteryMemberDto {
   userId: number;
   name: string | null;
   phone: string | null;
+  phoneNumber?: string | null;
+  email?: string | null;
   monasterySpaceId: number;
   spaceRoleId: number;
   spaceRoleName: string | null;
@@ -215,9 +217,9 @@ export const getMember = async (userId: number, monasterySpaceId: number) => {
  */
 export const createMonasteryService = async (
   currentUserId: number,
-  request: CreateSpaceInput
+  data: CreateSpaceInput
 ): Promise<MonasterySpaceDto> => {
-  if (!request.monasteryName || request.monasteryName.trim().length === 0) {
+  if (!data.monasteryName || data.monasteryName.trim().length === 0) {
     throw new AppError('Monastery name is required.', 400);
   }
 
@@ -233,21 +235,22 @@ export const createMonasteryService = async (
   return await prisma.$transaction(async (tx) => {
     const monastery = await tx.monasterySpace.create({
       data: {
-        monasteryName: request.monasteryName.trim(),
-        description: request.description?.trim(),
-        address: request.address?.trim(),
+        monasteryName: data.monasteryName.trim(),
+        description: data.description?.trim(),
+        address: data.address?.trim(),
         createdById: currentUserId,
         isDeleted: false,
       },
     });
 
-    await tx.monasteryMember.create({
+    const member = await tx.monasteryMember.create({
       data: {
         userId: currentUserId,
         monasterySpaceId: monastery.id,
         spaceRoleId: SPACE_ROLES.SPACE_ADMIN,
         isOwner: true,
       },
+      include: { spaceRole: true },
     });
 
     return {
@@ -256,8 +259,8 @@ export const createMonasteryService = async (
       description: monastery.description,
       address: monastery.address,
       createdById: monastery.createdById,
-      currentUserRoleId: SPACE_ROLES.SPACE_ADMIN,
-      currentUserRoleName: SPACE_ROLE_NAMES[SPACE_ROLES.SPACE_ADMIN],
+      currentUserRoleId: member.spaceRoleId,
+      currentUserRoleName: member.spaceRole?.name ?? 'Owner',
       isOwner: true,
       permissions: [...SPACE_PERMISSIONS],
     };
@@ -290,7 +293,7 @@ export const checkIsAdmin = async (userId: number, roleId?: number): Promise<boo
 export const updateMonasteryService = async (
   currentUserId: number,
   monasterySpaceId: number,
-  request: UpdateSpaceInput,
+  data: UpdateSpaceInput,
   currentUserRoleId?: number
 ): Promise<MonasterySpaceDto> => {
   const member = await getMember(currentUserId, monasterySpaceId);
@@ -310,10 +313,9 @@ export const updateMonasteryService = async (
   const updated = await prisma.monasterySpace.update({
     where: { id: monasterySpaceId },
     data: {
-      monasteryName: request.monasteryName?.trim() || monastery.monasteryName,
-      description:
-        request.description !== undefined ? request.description.trim() : monastery.description,
-      address: request.address !== undefined ? request.address.trim() : monastery.address,
+      monasteryName: data.monasteryName?.trim() || monastery.monasteryName,
+      description: data.description !== undefined ? data.description.trim() : monastery.description,
+      address: data.address !== undefined ? data.address.trim() : monastery.address,
     },
   });
 
@@ -412,19 +414,19 @@ export const getMonasteryService = async (
  * Public Monastery Catalog Listing (matching C# PublicCatalog: offset pagination, [AllowAnonymous])
  */
 export const getPublicMonasteriesCatalogService = async (
-  pagination: { pageNumber?: number; pageSize?: number; page?: number; limit?: number } = {}
+  data: { pageNumber?: number; pageSize?: number; page?: number; limit?: number } = {}
 ) => {
   const pageNumber =
-    pagination.pageNumber && pagination.pageNumber > 0
-      ? pagination.pageNumber
-      : pagination.page && pagination.page > 0
-        ? pagination.page
+    data.pageNumber && data.pageNumber > 0
+      ? data.pageNumber
+      : data.page && data.page > 0
+        ? data.page
         : 1;
   const pageSize =
-    pagination.pageSize && pagination.pageSize > 0
-      ? pagination.pageSize
-      : pagination.limit && pagination.limit > 0
-        ? pagination.limit
+    data.pageSize && data.pageSize > 0
+      ? data.pageSize
+      : data.limit && data.limit > 0
+        ? data.limit
         : 10;
   const skip = (pageNumber - 1) * pageSize;
 
@@ -463,8 +465,18 @@ export const getPublicMonasteriesCatalogService = async (
   const hasPreviousPage = pageNumber > 1;
   const hasNextPage = pageNumber < totalPages;
 
+  const pagination = {
+    pageNumber,
+    pageSize,
+    totalCount: total,
+    totalPages,
+    hasPreviousPage,
+    hasNextPage,
+  };
+
   return {
     items,
+    pagination,
     total,
     pageNumber,
     pageSize,
@@ -481,20 +493,20 @@ export const getPublicMonasteriesCatalogService = async (
  * Public Monastery Catalog Feed (matching C# PublicCatalogFeed: mobile cursor pagination, [AllowAnonymous])
  */
 export const getPublicMonasteriesFeedService = async (
-  options: { lastId?: number; pageSize?: number; limit?: number } = {}
+  data: { lastId?: number; pageSize?: number; limit?: number } = {}
 ) => {
   const pageSize =
-    options.pageSize && options.pageSize > 0
-      ? options.pageSize
-      : options.limit && options.limit > 0
-        ? options.limit
+    data.pageSize && data.pageSize > 0
+      ? data.pageSize
+      : data.limit && data.limit > 0
+        ? data.limit
         : 15;
 
   const where: Prisma.MonasterySpaceWhereInput = {
     isDeleted: false,
   };
-  if (options.lastId !== undefined && options.lastId > 0) {
-    where.id = { gt: options.lastId };
+  if (data.lastId !== undefined && data.lastId > 0) {
+    where.id = { gt: data.lastId };
   }
 
   const monasteries = await prisma.monasterySpace.findMany({
@@ -518,6 +530,11 @@ export const getPublicMonasteriesFeedService = async (
 
   return {
     items,
+    pagination: {
+      nextCursor,
+      hasNextPage,
+      pageSize,
+    },
     nextCursor,
     hasNextPage,
     pageSize,
@@ -528,7 +545,7 @@ export const getPublicMonasteriesFeedService = async (
  * Search Public Monasteries (matching C# SearchPublicMonasteries: offset pagination, [AllowAnonymous])
  */
 export const searchPublicMonasteriesService = async (
-  options: {
+  data: {
     keyword?: string;
     pageNumber?: number;
     pageSize?: number;
@@ -537,20 +554,20 @@ export const searchPublicMonasteriesService = async (
   } = {}
 ) => {
   const pageNumber =
-    options.pageNumber && options.pageNumber > 0
-      ? options.pageNumber
-      : options.page && options.page > 0
-        ? options.page
+    data.pageNumber && data.pageNumber > 0
+      ? data.pageNumber
+      : data.page && data.page > 0
+        ? data.page
         : 1;
   const pageSize =
-    options.pageSize && options.pageSize > 0
-      ? options.pageSize
-      : options.limit && options.limit > 0
-        ? options.limit
+    data.pageSize && data.pageSize > 0
+      ? data.pageSize
+      : data.limit && data.limit > 0
+        ? data.limit
         : 10;
   const skip = (pageNumber - 1) * pageSize;
 
-  const trimmedKeyword = options.keyword?.trim() || '';
+  const trimmedKeyword = data.keyword?.trim() || '';
   const where: Prisma.MonasterySpaceWhereInput = { isDeleted: false };
   if (trimmedKeyword) {
     where.OR = [
@@ -592,8 +609,18 @@ export const searchPublicMonasteriesService = async (
   const hasPreviousPage = pageNumber > 1;
   const hasNextPage = pageNumber < totalPages;
 
+  const pagination = {
+    pageNumber,
+    pageSize,
+    totalCount: total,
+    totalPages,
+    hasPreviousPage,
+    hasNextPage,
+  };
+
   return {
     items,
+    pagination,
     total,
     pageNumber,
     pageSize,
@@ -610,21 +637,21 @@ export const searchPublicMonasteriesService = async (
  * Search Public Monasteries Feed (matching C# SearchPublicMonasteriesFeed: mobile cursor, [AllowAnonymous])
  */
 export const searchPublicMonasteriesFeedService = async (
-  options: { keyword?: string; lastId?: number; pageSize?: number; limit?: number } = {}
+  data: { keyword?: string; lastId?: number; pageSize?: number; limit?: number } = {}
 ) => {
   const pageSize =
-    options.pageSize && options.pageSize > 0
-      ? options.pageSize
-      : options.limit && options.limit > 0
-        ? options.limit
+    data.pageSize && data.pageSize > 0
+      ? data.pageSize
+      : data.limit && data.limit > 0
+        ? data.limit
         : 15;
 
-  const trimmedKeyword = options.keyword?.trim() || '';
+  const trimmedKeyword = data.keyword?.trim() || '';
   const where: Prisma.MonasterySpaceWhereInput = {
     isDeleted: false,
   };
-  if (options.lastId !== undefined && options.lastId > 0) {
-    where.id = { gt: options.lastId };
+  if (data.lastId !== undefined && data.lastId > 0) {
+    where.id = { gt: data.lastId };
   }
   if (trimmedKeyword) {
     where.OR = [
@@ -654,6 +681,11 @@ export const searchPublicMonasteriesFeedService = async (
 
   return {
     items,
+    pagination: {
+      nextCursor,
+      hasNextPage,
+      pageSize,
+    },
     nextCursor,
     hasNextPage,
     pageSize,
@@ -665,7 +697,7 @@ export const searchPublicMonasteriesFeedService = async (
  */
 export const getMyMonasteriesService = async (
   currentUserId: number,
-  pagination: {
+  data: {
     page?: number;
     limit?: number;
     pageNumber?: number;
@@ -675,16 +707,16 @@ export const getMyMonasteriesService = async (
   currentUserRoleId?: number
 ) => {
   const page =
-    pagination.pageNumber && pagination.pageNumber > 0
-      ? pagination.pageNumber
-      : pagination.page && pagination.page > 0
-        ? pagination.page
+    data.pageNumber && data.pageNumber > 0
+      ? data.pageNumber
+      : data.page && data.page > 0
+        ? data.page
         : 1;
   const limit =
-    pagination.pageSize && pagination.pageSize > 0
-      ? pagination.pageSize
-      : pagination.limit && pagination.limit > 0
-        ? pagination.limit
+    data.pageSize && data.pageSize > 0
+      ? data.pageSize
+      : data.limit && data.limit > 0
+        ? data.limit
         : 10;
   const skip = (page - 1) * limit;
 
@@ -698,10 +730,10 @@ export const getMyMonasteriesService = async (
       isDeleted: false,
     };
 
-    if (pagination.search) {
+    if (data.search) {
       spaceWhere.OR = [
-        { monasteryName: { contains: pagination.search.trim() } },
-        { description: { contains: pagination.search.trim() } },
+        { monasteryName: { contains: data.search.trim() } },
+        { description: { contains: data.search.trim() } },
       ];
     }
 
@@ -752,7 +784,7 @@ export const getMyMonasteriesService = async (
         address: s.address,
         createdById: s.createdById,
         currentUserRoleId: myMembership ? myMembership.spaceRoleId : null,
-        currentUserRoleName: myMembership?.spaceRole?.name ?? 'Admin',
+        currentUserRoleName: myMembership?.spaceRole?.name ?? (isOwner ? 'Owner' : 'Admin'),
         isOwner,
         permissions: perms,
       };
@@ -762,8 +794,18 @@ export const getMyMonasteriesService = async (
     const hasPreviousPage = page > 1;
     const hasNextPage = page < totalPages;
 
+    const pagination = {
+      pageNumber: page,
+      pageSize: limit,
+      totalCount: total,
+      totalPages,
+      hasPreviousPage,
+      hasNextPage,
+    };
+
     return {
       items,
+      pagination,
       total,
       page,
       limit,
@@ -789,10 +831,10 @@ export const getMyMonasteriesService = async (
     },
   };
 
-  if (pagination.search) {
+  if (data.search) {
     whereClause.monasterySpace.OR = [
-      { monasteryName: { contains: pagination.search.trim() } },
-      { description: { contains: pagination.search.trim() } },
+      { monasteryName: { contains: data.search.trim() } },
+      { description: { contains: data.search.trim() } },
     ];
   }
 
@@ -842,8 +884,18 @@ export const getMyMonasteriesService = async (
   const hasPreviousPage = page > 1;
   const hasNextPage = page < totalPages;
 
+  const pagination = {
+    pageNumber: page,
+    pageSize: limit,
+    totalCount: total,
+    totalPages,
+    hasPreviousPage,
+    hasNextPage,
+  };
+
   return {
     items,
+    pagination,
     total,
     page,
     limit,
@@ -861,14 +913,14 @@ export const getMyMonasteriesService = async (
  */
 export const getMyMonasteriesFeedService = async (
   currentUserId: number,
-  options: { lastId?: number; pageSize?: number; limit?: number } = {},
+  data: { lastId?: number; pageSize?: number; limit?: number } = {},
   currentUserRoleId?: number
 ) => {
   const pageSize =
-    options.pageSize && options.pageSize > 0
-      ? options.pageSize
-      : options.limit && options.limit > 0
-        ? options.limit
+    data.pageSize && data.pageSize > 0
+      ? data.pageSize
+      : data.limit && data.limit > 0
+        ? data.limit
         : 15;
 
   const isAdmin = await checkIsAdmin(currentUserId, currentUserRoleId);
@@ -877,8 +929,8 @@ export const getMyMonasteriesFeedService = async (
     const spaceWhere: Prisma.MonasterySpaceWhereInput = {
       isDeleted: false,
     };
-    if (options.lastId !== undefined && options.lastId > 0) {
-      spaceWhere.id = { gt: options.lastId };
+    if (data.lastId !== undefined && data.lastId > 0) {
+      spaceWhere.id = { gt: data.lastId };
     }
 
     const spaces = await prisma.monasterySpace.findMany({
@@ -900,6 +952,7 @@ export const getMyMonasteriesFeedService = async (
 
     const items: MonasterySpaceDto[] = pagedSpaces.map((s) => {
       const myMembership = s.members && s.members.length > 0 ? s.members[0] : null;
+      const isOwner = myMembership ? myMembership.isOwner : false;
       return {
         id: s.id,
         monasteryName: s.monasteryName,
@@ -907,14 +960,19 @@ export const getMyMonasteriesFeedService = async (
         address: s.address,
         createdById: s.createdById,
         currentUserRoleId: myMembership ? myMembership.spaceRoleId : null,
-        currentUserRoleName: myMembership?.spaceRole?.name ?? 'Admin',
-        isOwner: myMembership ? myMembership.isOwner : false,
+        currentUserRoleName: myMembership?.spaceRole?.name ?? (isOwner ? 'Owner' : 'Admin'),
+        isOwner,
         permissions: [...SPACE_PERMISSIONS],
       };
     });
 
     return {
       items,
+      pagination: {
+        nextCursor,
+        hasNextPage,
+        pageSize,
+      },
       nextCursor,
       hasNextPage,
       pageSize,
@@ -927,8 +985,8 @@ export const getMyMonasteriesFeedService = async (
       isDeleted: false,
     },
   };
-  if (options.lastId !== undefined && options.lastId > 0) {
-    whereClause.monasterySpaceId = { gt: options.lastId };
+  if (data.lastId !== undefined && data.lastId > 0) {
+    whereClause.monasterySpaceId = { gt: data.lastId };
   }
 
   const memberships = await prisma.monasteryMember.findMany({
@@ -980,6 +1038,11 @@ export const getMyMonasteriesFeedService = async (
 
   return {
     items,
+    pagination: {
+      nextCursor,
+      hasNextPage,
+      pageSize,
+    },
     nextCursor,
     hasNextPage,
     pageSize,
@@ -992,7 +1055,7 @@ export const getMyMonasteriesFeedService = async (
 export const inviteMemberService = async (
   currentUserId: number,
   monasterySpaceId: number,
-  request: InviteMemberInput,
+  data: InviteMemberInput,
   currentUserRoleId?: number
 ): Promise<InvitationResponseDto> => {
   const inviter = await getMember(currentUserId, monasterySpaceId);
@@ -1001,7 +1064,7 @@ export const inviteMemberService = async (
     throw new AppError('User is not authorized to invite monastery members.', 403);
   }
 
-  const targetRoleId = request.spaceRoleId ?? request.roleId ?? SPACE_ROLES.SPACE_MEMBER;
+  const targetRoleId = data.spaceRoleId ?? data.roleId ?? SPACE_ROLES.SPACE_MEMBER;
   if (targetRoleId === SPACE_ROLES.SPACE_ADMIN && !inviter?.isOwner && !isAdmin) {
     throw new AppError(
       'Only the monastery space owner or system admin can invite a Space Admin.',
@@ -1016,7 +1079,7 @@ export const inviteMemberService = async (
   }
 
   let invitedUser = null;
-  const targetPhone = (request.phone ?? request.phoneNumber)?.trim();
+  const targetPhone = (data.phone ?? data.phoneNumber)?.trim();
   const normalizedPhone = targetPhone
     ? targetPhone.startsWith('+959')
       ? `09${targetPhone.slice(4)}`
@@ -1025,9 +1088,9 @@ export const inviteMemberService = async (
         : targetPhone
     : undefined;
 
-  if (request.userId) {
+  if (data.userId) {
     invitedUser = await prisma.user.findFirst({
-      where: { id: request.userId, isDeleted: false },
+      where: { id: data.userId, isDeleted: false },
     });
   } else if (normalizedPhone) {
     invitedUser = await prisma.user.findFirst({
@@ -1126,10 +1189,10 @@ export const inviteMemberService = async (
 export const respondToInvitationService = async (
   currentUserId: number,
   invitationId: number,
-  request: RespondInvitationInput
+  data: RespondInvitationInput
 ): Promise<InvitationResponseDto> => {
-  const isAccept = request.status === 2 || (request.status as number) === 1;
-  const isReject = request.status === 3 || (request.status as number) === 0;
+  const isAccept = data.status === 2 || (data.status as number) === 1;
+  const isReject = data.status === 3 || (data.status as number) === 0;
   if (!isAccept && !isReject) {
     throw new AppError('Invitation response must be Accept (2) or Reject (3).', 400);
   }
@@ -1206,7 +1269,7 @@ export const respondToInvitationService = async (
 export const getMembersService = async (
   currentUserId: number,
   monasterySpaceId: number,
-  pagination: { page?: number; limit?: number; pageNumber?: number; pageSize?: number } = {},
+  data: { page?: number; limit?: number; pageNumber?: number; pageSize?: number } = {},
   currentUserRoleId?: number
 ) => {
   const monastery = await prisma.monasterySpace.findFirst({
@@ -1224,16 +1287,16 @@ export const getMembersService = async (
   }
 
   const page =
-    pagination.pageNumber && pagination.pageNumber > 0
-      ? pagination.pageNumber
-      : pagination.page && pagination.page > 0
-        ? pagination.page
+    data.pageNumber && data.pageNumber > 0
+      ? data.pageNumber
+      : data.page && data.page > 0
+        ? data.page
         : 1;
   const limit =
-    pagination.pageSize && pagination.pageSize > 0
-      ? pagination.pageSize
-      : pagination.limit && pagination.limit > 0
-        ? pagination.limit
+    data.pageSize && data.pageSize > 0
+      ? data.pageSize
+      : data.limit && data.limit > 0
+        ? data.limit
         : 10;
   const skip = (page - 1) * limit;
 
@@ -1248,7 +1311,7 @@ export const getMembersService = async (
       orderBy: { id: 'asc' },
       include: {
         user: {
-          select: { id: true, name: true, phone: true },
+          select: { id: true, name: true, phone: true, email: true },
         },
         spaceRole: true,
       },
@@ -1285,6 +1348,8 @@ export const getMembersService = async (
       userId: m.user.id,
       name: m.user.name,
       phone: m.user.phone,
+      phoneNumber: m.user.phone,
+      email: m.user.email ?? null,
       monasterySpaceId: m.monasterySpaceId,
       spaceRoleId: m.spaceRoleId,
       spaceRoleName: m.spaceRole?.name ?? null,
@@ -1299,8 +1364,18 @@ export const getMembersService = async (
   const hasPreviousPage = page > 1;
   const hasNextPage = page < totalPages;
 
+  const pagination = {
+    pageNumber: page,
+    pageSize: limit,
+    totalCount: total,
+    totalPages,
+    hasPreviousPage,
+    hasNextPage,
+  };
+
   return {
     items,
+    pagination,
     total,
     page,
     limit,
@@ -1320,7 +1395,7 @@ export const updateMemberRoleService = async (
   currentUserId: number,
   monasterySpaceId: number,
   memberUserId: number,
-  request: UpdateMemberRoleInput,
+  data: UpdateMemberRoleInput,
   currentUserRoleId?: number
 ): Promise<MonasteryMemberDto> => {
   const actor = await getMember(currentUserId, monasterySpaceId);
@@ -1329,7 +1404,7 @@ export const updateMemberRoleService = async (
     throw new AppError('User is not authorized to manage monastery members.', 403);
   }
 
-  const targetRoleId = request.spaceRoleId ?? request.roleId;
+  const targetRoleId = data.spaceRoleId ?? data.roleId;
   if (!targetRoleId) {
     throw new AppError('Valid roleId is required.', 400);
   }
@@ -1368,7 +1443,7 @@ export const updateMemberRoleService = async (
     where: { id: member.id },
     data: { spaceRoleId: targetRoleId },
     include: {
-      user: { select: { id: true, name: true, phone: true } },
+      user: { select: { id: true, name: true, phone: true, email: true } },
       spaceRole: true,
     },
   });
@@ -1380,6 +1455,8 @@ export const updateMemberRoleService = async (
     userId: updated.user.id,
     name: updated.user.name,
     phone: updated.user.phone,
+    phoneNumber: updated.user.phone,
+    email: updated.user.email ?? null,
     monasterySpaceId: updated.monasterySpaceId,
     spaceRoleId: updated.spaceRoleId,
     spaceRoleName: updated.spaceRole?.name ?? spaceRole.name,
@@ -1413,7 +1490,7 @@ export const removeMemberService = async (
     },
     include: {
       spaceRole: true,
-      user: { select: { id: true, name: true, phone: true } },
+      user: { select: { id: true, name: true, phone: true, email: true } },
     },
   });
   if (!member) {
@@ -1435,7 +1512,7 @@ export const removeMemberService = async (
     member.user ??
     (await prisma.user.findUnique({
       where: { id: memberUserId },
-      select: { id: true, name: true, phone: true },
+      select: { id: true, name: true, phone: true, email: true },
     }));
   const spaceRole =
     member.spaceRole ?? (await prisma.spaceRole.findUnique({ where: { id: member.spaceRoleId } }));
@@ -1447,6 +1524,8 @@ export const removeMemberService = async (
     userId: member.userId,
     name: user?.name ?? null,
     phone: user?.phone ?? null,
+    phoneNumber: user?.phone ?? null,
+    email: user?.email ?? null,
     monasterySpaceId: member.monasterySpaceId,
     spaceRoleId: member.spaceRoleId,
     spaceRoleName: spaceRole?.name ?? null,

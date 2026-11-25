@@ -25,6 +25,7 @@ interface MockUser {
   id: number;
   name: string;
   phone: string;
+  email?: string | null;
   roleId: number;
   isDeleted: boolean;
 }
@@ -766,10 +767,38 @@ describe('Monastery Service Unit Tests (matching C# HsumChaint)', () => {
     ];
 
     mockUsers = [
-      { id: 1, name: 'Sayadaw U Thila', phone: '09111111111', roleId: 1, isDeleted: false },
-      { id: 2, name: 'Donor Ko Min', phone: '09222222222', roleId: 2, isDeleted: false },
-      { id: 3, name: 'U Zaw', phone: '09333333333', roleId: 2, isDeleted: false },
-      { id: 4, name: 'Admin User', phone: '09444444444', roleId: 3, isDeleted: false },
+      {
+        id: 1,
+        name: 'Sayadaw U Thila',
+        phone: '09111111111',
+        email: 'sayadaw@monastery.org',
+        roleId: 1,
+        isDeleted: false,
+      },
+      {
+        id: 2,
+        name: 'Donor Ko Min',
+        phone: '09222222222',
+        email: 'komin@donor.org',
+        roleId: 2,
+        isDeleted: false,
+      },
+      {
+        id: 3,
+        name: 'U Zaw',
+        phone: '09333333333',
+        email: 'uzaw@monk.org',
+        roleId: 2,
+        isDeleted: false,
+      },
+      {
+        id: 4,
+        name: 'Admin User',
+        phone: '09444444444',
+        email: 'admin@hsumchaint.org',
+        roleId: 3,
+        isDeleted: false,
+      },
     ];
 
     mockSpaces = [];
@@ -1014,6 +1043,8 @@ describe('Monastery Service Unit Tests (matching C# HsumChaint)', () => {
 
       expect(result.items.length).toBe(1);
       expect(result.items[0].name).toBe('Sayadaw U Thila');
+      expect(result.items[0].phone).toBe('09111111111');
+      expect(result.items[0].email).toBe('sayadaw@monastery.org');
       expect(result.items[0].isOwner).toBe(true);
       expect(result.items[0].spaceRoleName).toBe('Space Admin');
       expect(result.items[0].permissions).toBeArray();

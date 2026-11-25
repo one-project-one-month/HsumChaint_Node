@@ -2,7 +2,6 @@ import { Router } from 'express';
 import { authMiddleware } from '@/middlewares/authMiddleWare';
 import { checkPermission, requireSpacePermission } from '@/middlewares/permissionMiddleware';
 import { validator } from '@/middlewares/validator';
-import { createSpaceDonationRouter } from '@/modules/donation/donation.routes';
 import {
   createSpace,
   deleteSpace,
@@ -38,157 +37,113 @@ import {
   updateSpaceSchema,
 } from './space.schema';
 
-export const spaceRouter = Router();
+const router = Router();
 
 // ==========================================
 // Public Monastery Catalog & Discovery ([AllowAnonymous])
 // ==========================================
-// 16. Public Monastery Catalog Listing (offset pagination)
-spaceRouter.get('/', validator(catalogPaginationSchema), getPublicMonasteriesCatalog);
 
-// 16b. Public Monastery Catalog Feed (mobile cursor pagination)
-spaceRouter.get('/feed', validator(cursorFeedSchema), getPublicMonasteriesFeed);
+// Public Monastery Catalog Listing
+router.get('/', validator(catalogPaginationSchema), getPublicMonasteriesCatalog);
 
-// 17. Search Public Monasteries (offset pagination)
-spaceRouter.get('/search', validator(searchMonasteriesSchema), searchPublicMonasteries);
+// Public Monastery Catalog Feed (Mobile Cursor)
+router.get('/feed', validator(cursorFeedSchema), getPublicMonasteriesFeed);
 
-// 17b. Search Public Monasteries Feed (mobile cursor pagination)
-spaceRouter.get('/search/feed', validator(searchFeedSchema), searchPublicMonasteriesFeed);
+// Search Public Monasteries
+router.get('/search', validator(searchMonasteriesSchema), searchPublicMonasteries);
+
+// Search Public Monasteries Feed (Mobile Cursor)
+router.get('/search/feed', validator(searchFeedSchema), searchPublicMonasteriesFeed);
 
 // ==========================================
+// Authenticated Space Endpoints (Requires Login)
+// ==========================================
+router.use(authMiddleware);
+
 // Space Roles Catalog (Global)
-// ==========================================
-spaceRouter.get('/roles', authMiddleware, getSpaceRoles);
-spaceRouter.get('/roles/:id', authMiddleware, validator(spaceIdParamSchema), getSpaceRoleById);
+router.get('/roles', getSpaceRoles);
+router.get('/roles/:id', validator(spaceIdParamSchema), getSpaceRoleById);
 
-// ==========================================
-// Authenticated Space Management Endpoints
-// ==========================================
-// 18. Create Monastery Space (monk/admin)
-spaceRouter.post(
-  '/',
-  authMiddleware,
-  checkPermission('Monastery.Create'),
-  validator(createSpaceSchema),
-  createSpace
-);
+// Create Monastery Space
+router.post('/', checkPermission('Monastery.Create'), validator(createSpaceSchema), createSpace);
 
-// 19. Get My Monasteries (offset pagination)
-spaceRouter.get('/mine', authMiddleware, validator(catalogPaginationSchema), getMyMonasteries);
+// Get My Monasteries
+router.get('/mine', validator(catalogPaginationSchema), getMyMonasteries);
 
-// 19b. Get My Monasteries Feed (mobile cursor pagination)
-spaceRouter.get('/mine/feed', authMiddleware, validator(cursorFeedSchema), getMyMonasteriesFeed);
+// Get My Monasteries Feed (Mobile Cursor)
+router.get('/mine/feed', validator(cursorFeedSchema), getMyMonasteriesFeed);
 
-// Member Invitations response
-spaceRouter.post(
-  '/invitations/:invitationId/respond',
-  authMiddleware,
-  validator(respondInvitationSchema),
-  respondToInvitation
-);
-
-// Space Donations sub-router
-spaceRouter.use('/:spaceId/donations', authMiddleware, createSpaceDonationRouter());
-
-// ==========================================
-// Space Context Endpoints (by Space ID)
-// ==========================================
-// Current user space permissions
-spaceRouter.get(
-  '/:id/permissions',
-  authMiddleware,
+// Get Monastery Space Details
+router.get(
+  '/:id',
   validator(spaceIdParamSchema),
-  getSpacePermissions
+  requireSpacePermission('Space.View'),
+  getSpaceById
 );
 
-// Space roles available for monastery space
-spaceRouter.get('/:id/roles', authMiddleware, validator(spaceIdParamSchema), getSpaceRoles);
-
-// Space members listing
-spaceRouter.get(
-  '/:id/members',
-  authMiddleware,
-  validator(membersPaginationSchema),
-  requireSpacePermission('Space.ViewMembers'),
-  getSpaceMembers
+// Update Monastery Space
+router.patch(
+  '/:id',
+  validator(spaceIdParamSchema),
+  requireSpacePermission('Space.Update'),
+  validator(updateSpaceSchema),
+  updateSpace
 );
 
-// Space member role updates (supports /:id/members/:memberUserId/role and /:id/members/:userId)
-spaceRouter.put(
-  '/:id/members/:memberUserId/role',
-  authMiddleware,
-  requireSpacePermission('Space.UpdateMemberRole'),
-  validator(updateMemberRoleSchema),
-  updateMemberRole
-);
-spaceRouter.put(
-  '/:id/members/:userId',
-  authMiddleware,
-  requireSpacePermission('Space.UpdateMemberRole'),
-  validator(updateMemberRoleSchema),
-  updateMemberRole
+// Delete Monastery Space
+router.delete(
+  '/:id',
+  validator(spaceIdParamSchema),
+  requireSpacePermission('Space.Delete'),
+  deleteSpace
 );
 
-// Remove space member
-spaceRouter.delete(
-  '/:id/members/:memberUserId',
-  authMiddleware,
-  requireSpacePermission('Space.RemoveMember'),
-  validator(removeMemberSchema),
-  removeSpaceMember
-);
-spaceRouter.delete(
-  '/:id/members/:userId',
-  authMiddleware,
-  requireSpacePermission('Space.RemoveMember'),
-  validator(removeMemberSchema),
-  removeSpaceMember
-);
-
-// Invite member to space
-spaceRouter.post(
+// Invite Member to Space
+router.post(
   '/:id/invitations',
-  authMiddleware,
   validator(spaceIdParamSchema),
   requireSpacePermission('Space.InviteMember'),
   validator(inviteMemberSchema),
   inviteMember
 );
 
-// 20. Get Monastery Space Details
-spaceRouter.get(
-  '/:id',
-  authMiddleware,
-  validator(spaceIdParamSchema),
-  requireSpacePermission('Space.View'),
-  getSpaceById
+// Respond to Space Invitation
+router.post(
+  '/invitations/:invitationId/respond',
+  checkPermission('Invitation.Respond'),
+  validator(respondInvitationSchema),
+  respondToInvitation
 );
 
-// 21. Update Monastery Space (supports PUT and PATCH)
-spaceRouter.put(
-  '/:id',
-  authMiddleware,
-  validator(spaceIdParamSchema),
-  requireSpacePermission('Space.Update'),
-  validator(updateSpaceSchema),
-  updateSpace
-);
-spaceRouter.patch(
-  '/:id',
-  authMiddleware,
-  validator(spaceIdParamSchema),
-  requireSpacePermission('Space.Update'),
-  validator(updateSpaceSchema),
-  updateSpace
+// List Space Members
+router.get(
+  '/:id/members',
+  validator(membersPaginationSchema),
+  requireSpacePermission('Space.ViewMembers'),
+  getSpaceMembers
 );
 
-// 22. Delete Monastery Space (Owner only)
-spaceRouter.delete(
-  '/:id',
-  authMiddleware,
-  validator(spaceIdParamSchema),
-  requireSpacePermission('Space.Delete'),
-  deleteSpace
+// Update Space Member Role
+router.put(
+  '/:id/members/:memberUserId/role',
+  requireSpacePermission('Space.UpdateMemberRole'),
+  validator(updateMemberRoleSchema),
+  updateMemberRole
 );
 
-export default spaceRouter;
+// Remove Member from Space
+router.delete(
+  '/:id/members/:memberUserId',
+  requireSpacePermission('Space.RemoveMember'),
+  validator(removeMemberSchema),
+  removeSpaceMember
+);
+
+// Get Current User's Space Permissions
+router.get('/:id/permissions', validator(spaceIdParamSchema), getSpacePermissions);
+
+// Get Available Monastery Space Roles
+router.get('/:id/roles', validator(spaceIdParamSchema), getSpaceRoles);
+
+export { router as spaceRouter };
+export default router;

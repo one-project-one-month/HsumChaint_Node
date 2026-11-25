@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { myanmarPhoneRegex } from '../auth/auth.schema';
 import {
   DONATION_PERMISSIONS,
   DONATION_STATUS,
@@ -15,42 +16,19 @@ export const idSchema = z.coerce.number().int().positive().max(2147483647);
 
 function enumCode<T extends Record<string, number>>(values: T) {
   const names = Object.keys(values) as [keyof T & string, ...(keyof T & string)[]];
+  const validNumbers = Object.values(values) as number[];
   return z.union([
     z
       .number()
       .int()
-      .min(0)
-      .max(names.length - 1),
+      .refine((val) => validNumbers.includes(val), {
+        message: `Invalid code. Expected one of: ${validNumbers.join(', ')}`,
+      }),
     z.enum(names).transform((name) => values[name]),
   ]);
 }
 
-export const statusCodeSchema = z.preprocess(
-  (val) => {
-    if (typeof val === 'string' && /^\d+$/.test(val)) return Number(val);
-    return val;
-  },
-  z.union([
-    z
-      .number()
-      .int()
-      .min(0)
-      .max(7)
-      .transform((n) => {
-        if (n === 6) return DONATION_STATUS.Rejected; // 4
-        if (n === 7) return DONATION_STATUS.Cancelled; // 5
-        return n;
-      }),
-    z
-      .enum(
-        Object.keys(DONATION_STATUS) as [
-          keyof typeof DONATION_STATUS,
-          ...(keyof typeof DONATION_STATUS)[],
-        ]
-      )
-      .transform((name) => DONATION_STATUS[name]),
-  ])
-);
+export const statusCodeSchema = enumCode(DONATION_STATUS);
 export const typeCodeSchema = enumCode(DONATION_TYPE);
 
 export const queryStatusSchema = z.preprocess(
@@ -107,9 +85,27 @@ const baseDonationFields = {
   dropoffTime: dateTimeSchema.nullable().optional(),
 };
 
+export const donorPhoneSchema = z.preprocess(
+  (val) => (typeof val === 'string' ? val.replace(/[\s-]/g, '') : val),
+  z
+    .string()
+    .trim()
+    .regex(myanmarPhoneRegex, 'Invalid phone number')
+    .transform((val) => {
+      if (val.startsWith('+959')) return `09${val.slice(4)}`;
+      if (val.startsWith('959')) return `09${val.slice(3)}`;
+      return val;
+    })
+    .or(z.literal('').transform(() => null))
+    .nullable()
+    .optional()
+);
+
 const manualDonorFields = {
   donorId: idSchema.nullable().optional(),
   donorName: z.string().trim().min(1).max(255).nullable().optional(),
+  donorPhoneNumber: donorPhoneSchema,
+  donorPhone: donorPhoneSchema,
 };
 
 // ============================================================================
@@ -129,7 +125,10 @@ export const manualDonationInputSchema = z
   .strict()
   .refine(validateCustomType, 'Custom donation type is required for Other')
   .refine(
-    (data) => data.donorId != null || Boolean(data.donorName?.trim()),
+    (data) =>
+      data.donorId != null ||
+      Boolean(data.donorName?.trim()) ||
+      Boolean(data.donorPhoneNumber || data.donorPhone),
     'Donor name is required without a donor account'
   );
 
@@ -168,7 +167,10 @@ export const manualRecurringInputSchema = z
   .strict()
   .refine(validateCustomType, 'Custom donation type is required for Other')
   .refine(
-    (data) => data.donorId != null || Boolean(data.donorName?.trim()),
+    (data) =>
+      data.donorId != null ||
+      Boolean(data.donorName?.trim()) ||
+      Boolean(data.donorPhoneNumber || data.donorPhone),
     'Donor name is required without a donor account'
   );
 
@@ -188,6 +190,22 @@ export const donationQueryInputSchema = z
     'Date range must be ordered'
   );
 
+export const donationFeedQueryInputSchema = z
+  .object({
+    monasterySpaceId: idSchema.optional(),
+    donorId: idSchema.optional(),
+    lastId: z.coerce.number().int().min(1).optional(),
+    pageSize: z.coerce.number().int().min(1).max(100).default(15),
+    status: queryStatusSchema.optional(),
+    fromDate: dateTimeSchema.optional(),
+    toDate: dateTimeSchema.optional(),
+  })
+  .refine(
+    (data) =>
+      !data.fromDate || !data.toDate || Date.parse(data.fromDate) <= Date.parse(data.toDate),
+    'Date range must be ordered'
+  );
+
 export const monthlyQueryInputSchema = z.object({
   monasterySpaceId: idSchema.optional(),
   year: z.coerce.number().int().min(2000).max(2100),
@@ -197,20 +215,23 @@ export const monthlyQueryInputSchema = z.object({
 
 export const reviewDonationInputSchema = z
   .object({
-    status: statusCodeSchema
-      .refine(
-        (val) =>
-          val === DONATION_STATUS.Accepted ||
-          val === DONATION_STATUS.Rejected ||
-          val === 3 ||
-          val === 6,
-        'Review status must be Accepted (1) or Rejected (4)'
-      )
-      .transform((val) => {
-        if (val === 3) return DONATION_STATUS.Accepted;
-        if (val === 6) return DONATION_STATUS.Rejected;
-        return val;
-      }),
+    status: z.union([
+      z
+        .number()
+        .int()
+        .refine(
+          (val) => val === DONATION_STATUS.Accepted || val === DONATION_STATUS.Rejected,
+          'Review status must be Accepted (2) or Rejected (3)'
+        ),
+      z.enum(['Accepted', 'Rejected']).transform((name) => DONATION_STATUS[name]),
+    ]),
+    note: z.string().max(1000).nullable().optional(),
+  })
+  .strict();
+
+export const updateDonationStatusInputSchema = z
+  .object({
+    status: statusCodeSchema,
     note: z.string().max(1000).nullable().optional(),
   })
   .strict();
@@ -356,6 +377,16 @@ export const donationQuerySchema = z
     path: ['query', 'monasterySpaceId'],
   });
 
+export const donationFeedQuerySchema = z
+  .object({
+    params: z.object({ spaceId: idSchema.optional() }).optional(),
+    query: donationFeedQueryInputSchema,
+  })
+  .refine((data) => checkSpaceMatch(data.params, data.query), {
+    message: 'Query monasterySpaceId must match the URL',
+    path: ['query', 'monasterySpaceId'],
+  });
+
 export const monthlyQuerySchema = z
   .object({
     params: z.object({ spaceId: idSchema.optional() }).optional(),
@@ -378,6 +409,20 @@ export const reviewDonationSchema = z.object({
       path: ['donationId'],
     }),
   body: reviewDonationInputSchema,
+});
+
+export const updateDonationStatusSchema = z.object({
+  params: z
+    .object({
+      id: idSchema.optional(),
+      donationId: idSchema.optional(),
+      spaceId: idSchema.optional(),
+    })
+    .refine((data) => data.id !== undefined || data.donationId !== undefined, {
+      message: 'Donation ID is required',
+      path: ['donationId'],
+    }),
+  body: updateDonationStatusInputSchema,
 });
 
 export const scheduleDonationSchema = z.object({
@@ -406,53 +451,6 @@ export const cancelDonationSchema = z.object({
       path: ['donationId'],
     }),
   body: cancelDonationInputSchema.optional(),
-});
-
-export const donationFeedQueryInputSchema = z
-  .object({
-    monasterySpaceId: idSchema.optional(),
-    donorId: idSchema.optional(),
-    status: queryStatusSchema.optional(),
-    fromDate: dateTimeSchema.optional(),
-    toDate: dateTimeSchema.optional(),
-    lastId: z.coerce.number().int().positive().optional(),
-    pageSize: z.coerce.number().int().min(1).max(100).default(15),
-  })
-  .refine(
-    (data) =>
-      !data.fromDate || !data.toDate || Date.parse(data.fromDate) <= Date.parse(data.toDate),
-    'Date range must be ordered'
-  );
-
-export const updateDonationStatusInputSchema = z
-  .object({
-    status: statusCodeSchema,
-    note: z.string().max(1000).nullable().optional(),
-  })
-  .strict();
-
-export const donationFeedQuerySchema = z
-  .object({
-    params: z.object({ spaceId: idSchema.optional() }).optional(),
-    query: donationFeedQueryInputSchema,
-  })
-  .refine((data) => checkSpaceMatch(data.params, data.query), {
-    message: 'Query monasterySpaceId must match the URL',
-    path: ['query', 'monasterySpaceId'],
-  });
-
-export const updateDonationStatusSchema = z.object({
-  params: z
-    .object({
-      id: idSchema.optional(),
-      donationId: idSchema.optional(),
-      spaceId: idSchema.optional(),
-    })
-    .refine((data) => data.id !== undefined || data.donationId !== undefined, {
-      message: 'Donation ID is required',
-      path: ['donationId'],
-    }),
-  body: updateDonationStatusInputSchema,
 });
 
 export const reviewSeriesSchema = z.object({
@@ -486,9 +484,9 @@ export type DonationQueryInput = z.infer<typeof donationQueryInputSchema>;
 export type DonationFeedQueryInput = z.infer<typeof donationFeedQueryInputSchema>;
 export type MonthlyQueryInput = z.infer<typeof monthlyQueryInputSchema>;
 export type ReviewDonationInput = z.infer<typeof reviewDonationInputSchema>;
+export type UpdateDonationStatusInput = z.infer<typeof updateDonationStatusInputSchema>;
 export type ScheduleDonationInput = z.infer<typeof scheduleDonationInputSchema>;
 export type CancelDonationInput = z.infer<typeof cancelDonationInputSchema>;
-export type UpdateDonationStatusInput = z.infer<typeof updateDonationStatusInputSchema>;
 
 export type { DonationPermission, DonationStatus };
 
@@ -506,6 +504,7 @@ export const requestRecurringInput = requestRecurringSchema;
 export const requestManualRecurringInput = manualRecurringSchema;
 export const donationParams = donationIdParamSchema;
 export const donationQuery = donationQueryInputSchema;
+export const donationFeedQuery = donationFeedQuerySchema;
 export const donationReview = reviewDonationInputSchema;
 export const donationSchedule = scheduleDonationInputSchema;
 export const monthlyQuery = monthlyQueryInputSchema;

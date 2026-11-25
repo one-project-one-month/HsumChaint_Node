@@ -135,6 +135,41 @@ describe('Notification Module Endpoints', () => {
       );
     });
 
+    it('should support string notificationType like "DonationAccepted"', async () => {
+      userFindFirstMock.mockResolvedValue({
+        ...FAKE_USER,
+        id: 3,
+      } as unknown as User);
+      notificationCreateMock.mockResolvedValue({
+        ...FAKE_NOTIFICATION,
+        id: 3,
+        userId: 3,
+        type: 5,
+      } as unknown as Notification);
+
+      const response = await request(app)
+        .post('/api/v1/notifications/create')
+        .set('Authorization', accessToken)
+        .send({
+          userId: 3,
+          notificationType: 'DonationAccepted',
+          message: 'Your donation request for Mahagandhayon Monastery has been accepted.',
+        });
+
+      expect(response.status).toBe(201);
+      expect(response.body.isSuccess).toBe(true);
+      expect(response.body.isFailure).toBe(false);
+      expect(notificationCreateMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            userId: 3,
+            type: 5,
+            message: 'Your donation request for Mahagandhayon Monastery has been accepted.',
+          }),
+        })
+      );
+    });
+
     it('should return 400 when message is empty or missing', async () => {
       const response = await request(app)
         .post('/api/v1/notifications/create')
@@ -172,6 +207,27 @@ describe('Notification Module Endpoints', () => {
       expect(response.body.message).toBe('Notifications retrieved successfully.');
       expect(response.body.data.items).toHaveLength(1);
       expect(response.body.data.unreadCount).toBe(1);
+      expect(response.body.pagination).toMatchObject({
+        pageNumber: 1,
+        pageSize: 10,
+        totalCount: 1,
+        totalPages: 1,
+        hasPreviousPage: false,
+        hasNextPage: false,
+      });
+    });
+
+    it('should retrieve notifications with pageNumber and pageSize query parameters', async () => {
+      notificationFindManyMock.mockResolvedValue([FAKE_NOTIFICATION] as unknown as Notification[]);
+      notificationCountMock.mockResolvedValue(1);
+
+      const response = await request(app)
+        .get('/api/v1/notifications?pageNumber=1&pageSize=10')
+        .set('Authorization', accessToken);
+
+      expect(response.status).toBe(200);
+      expect(response.body.isSuccess).toBe(true);
+      expect(response.body.data.items).toHaveLength(1);
       expect(response.body.pagination).toMatchObject({
         pageNumber: 1,
         pageSize: 10,
@@ -279,7 +335,7 @@ describe('Notification Module Endpoints', () => {
       });
     });
 
-    it('should soft delete notification via route param DELETE /:id', async () => {
+    it('should soft delete notification with only notificationId in body', async () => {
       notificationFindFirstMock.mockResolvedValue(FAKE_NOTIFICATION as unknown as Notification);
       notificationUpdateMock.mockResolvedValue({
         ...FAKE_NOTIFICATION,
@@ -287,8 +343,9 @@ describe('Notification Module Endpoints', () => {
       } as unknown as Notification);
 
       const response = await request(app)
-        .delete(`/api/v1/notifications/${FAKE_NOTIFICATION.id}`)
-        .set('Authorization', accessToken);
+        .delete('/api/v1/notifications/delete')
+        .set('Authorization', accessToken)
+        .send({ notificationId: FAKE_NOTIFICATION.id });
 
       expect(response.status).toBe(200);
       expect(response.body.isSuccess).toBe(true);

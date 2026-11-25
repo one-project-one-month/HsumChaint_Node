@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma';
+import type { PaginationMeta } from '@/utils/response';
 import { formatPermission } from '../permission/permission.service';
 import type { GetSpacePermissionsQueryInput } from './space-permission.schema';
 
@@ -39,7 +40,9 @@ export const ensureSpacePermissionsInDb = async (): Promise<void> => {
  * Generic listing/pagination operation for space permissions (ordered ascending by default)
  */
 export const getSpacePermissionsOnlyService = async (pageNumber = 1, pageSize = 10) => {
-  const skip = (pageNumber - 1) * pageSize;
+  const numPage = Number(pageNumber) || 1;
+  const numLimit = Number(pageSize) || 10;
+  const skip = (numPage - 1) * numLimit;
 
   let totalCount = await prisma.spacePermission.count({ where: { isDeleted: false } });
 
@@ -58,19 +61,30 @@ export const getSpacePermissionsOnlyService = async (pageNumber = 1, pageSize = 
   const permissions = await prisma.spacePermission.findMany({
     where: { isDeleted: false },
     skip,
-    take: pageSize,
+    take: numLimit,
     orderBy: { id: 'asc' },
   });
 
+  const totalPages = Math.ceil(totalCount / numLimit) || 1;
+  const pagination: PaginationMeta = {
+    pageNumber: numPage,
+    pageSize: numLimit,
+    totalCount,
+    totalPages,
+    hasPreviousPage: numPage > 1,
+    hasNextPage: numPage < totalPages,
+  };
+
   return {
     items: permissions.map(formatPermission),
+    pagination,
     totalCount,
-    pageNumber,
-    pageSize,
-    totalPages: Math.ceil(totalCount / pageSize) || 1,
+    pageNumber: numPage,
+    pageSize: numLimit,
+    totalPages,
     total: totalCount,
-    page: pageNumber,
-    limit: pageSize,
+    page: numPage,
+    limit: numLimit,
   };
 };
 
@@ -82,13 +96,15 @@ export const searchSpacePermissionsService = async (
   pageSize = 10,
   keyword: string
 ) => {
-  const skip = (pageNumber - 1) * pageSize;
+  const numPage = Number(pageNumber) || 1;
+  const numLimit = Number(pageSize) || 10;
+  const skip = (numPage - 1) * numLimit;
   const trimmed = keyword.trim();
 
   const permissions = await prisma.spacePermission.findMany({
     where: { isDeleted: false, name: { contains: trimmed } },
     skip,
-    take: pageSize,
+    take: numLimit,
     orderBy: { id: 'asc' },
   });
 
@@ -96,15 +112,26 @@ export const searchSpacePermissionsService = async (
     where: { isDeleted: false, name: { contains: trimmed } },
   });
 
+  const totalPages = Math.ceil(totalCount / numLimit) || 1;
+  const pagination: PaginationMeta = {
+    pageNumber: numPage,
+    pageSize: numLimit,
+    totalCount,
+    totalPages,
+    hasPreviousPage: numPage > 1,
+    hasNextPage: numPage < totalPages,
+  };
+
   return {
     items: permissions.map(formatPermission),
+    pagination,
     totalCount,
-    pageNumber,
-    pageSize,
-    totalPages: Math.ceil(totalCount / pageSize) || 1,
+    pageNumber: numPage,
+    pageSize: numLimit,
+    totalPages,
     total: totalCount,
-    page: pageNumber,
-    limit: pageSize,
+    page: numPage,
+    limit: numLimit,
   };
 };
 
@@ -114,9 +141,9 @@ export const searchSpacePermissionsService = async (
 export const getSpacePermissionsService = async (
   query: GetSpacePermissionsQueryInput = { pageNumber: 1, pageSize: 10 }
 ) => {
-  const pageNumber = query.pageNumber ?? query.page ?? 1;
-  const pageSize = query.pageSize ?? query.limit ?? 10;
-  const search = query.search;
+  const pageNumber = Number(query?.pageNumber ?? query?.page) || 1;
+  const pageSize = Number(query?.pageSize ?? query?.limit) || 10;
+  const search = query?.search;
 
   if (search && search.trim().length > 0) {
     return searchSpacePermissionsService(pageNumber, pageSize, search.trim());

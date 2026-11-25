@@ -10,17 +10,14 @@ import { globalErrorHandler } from './middlewares/errorHandler';
 import { httpLogger } from './middlewares/httpLogger';
 import authRoutes from './modules/auth/auth.routes';
 import { donationRouter } from './modules/donation/donation.routes';
-import { donationCalendarRouter } from './modules/donation-calendar/calendar.routes';
-import { donorRouter } from './modules/donor/donor.routes';
 import healthRoutes from './modules/health/health.routes';
 import { notificationRouter } from './modules/notification/notification.routes';
-import permissionRouter from './modules/permission/permission.routes';
-import roleRouter from './modules/role/role.routes';
+import { permissionRouter } from './modules/permission/permission.routes';
+import { roleRouter } from './modules/role/role.routes';
 import { spaceRouter } from './modules/space/space.routes';
-import spacePermissionRouter from './modules/space-permission/space-permission.routes';
-import spaceRoleRouter from './modules/space-role/space-role.routes';
+import { spacePermissionRouter } from './modules/space-permission/space-permission.routes';
+import { spaceRoleRouter } from './modules/space-role/space-role.routes';
 import { userRouter } from './modules/user/user.routes';
-import { userSettingRouter } from './modules/user-setting/user-setting.routes';
 import { errorResponse, successResponse } from './utils/response';
 
 const app = express();
@@ -48,19 +45,14 @@ app.use(httpLogger);
 
 // Routes
 app.use('/api/v1/user', userRouter);
-app.use('/api/v1/users', userRouter);
 app.use('/api/v1/monasteries', spaceRouter);
-app.use('/api/v1/spaces', spaceRouter);
 app.use('/api/v1/roles', roleRouter);
 app.use('/api/v1/permissions', permissionRouter);
 app.use('/api/v1/space-roles', spaceRoleRouter);
 app.use('/api/v1/space-permissions', spacePermissionRouter);
 app.use('/api/v1/auth', authRoutes);
-app.use('/api/v1/donors', donorRouter);
-app.use('/api/v1/user-settings', userSettingRouter);
 app.use('/api/v1/notifications', notificationRouter);
 app.use('/api/v1/donations', donationRouter);
-app.use('/api/v1/donations', donationCalendarRouter);
 
 // Health check
 app.get('/health', (_, res) => {

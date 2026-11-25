@@ -5,15 +5,31 @@ import { z } from 'zod';
 // ==========================================
 
 // 44. Get System Roles query schema
-export const getRolesQuerySchema = z.object({
-  query: z.object({
-    pageNumber: z.coerce.number().int().positive().default(1),
-    pageSize: z.coerce.number().int().positive().max(100).default(10),
-    page: z.coerce.number().int().positive().optional(),
-    limit: z.coerce.number().int().positive().max(100).optional(),
+export const getRolesQueryInputSchema = z
+  .object({
+    pageNumber: z.coerce.number().int().min(1).optional(),
+    page: z.coerce.number().int().min(1).optional(),
+    pageSize: z.coerce.number().int().min(1).max(100).optional(),
+    limit: z.coerce.number().int().min(1).max(100).optional(),
     roleName: z.string().trim().optional(),
     search: z.string().trim().optional(),
-  }),
+  })
+  .transform((data) => {
+    const pageNumber = data.pageNumber ?? data.page ?? 1;
+    const pageSize = data.pageSize ?? data.limit ?? 10;
+    const roleName = data.roleName ?? data.search;
+    return {
+      ...data,
+      pageNumber,
+      pageSize,
+      page: pageNumber,
+      limit: pageSize,
+      roleName,
+    };
+  });
+
+export const getRolesQuerySchema = z.object({
+  query: getRolesQueryInputSchema,
 });
 
 // 45. Role by ID param schema
@@ -91,7 +107,14 @@ export const assignPermissionsSchema = z.object({
 // ==========================================
 // Types
 // ==========================================
-export type GetRolesQueryInput = z.infer<typeof getRolesQuerySchema>['query'];
+export type GetRolesQueryInput = {
+  pageNumber?: number;
+  pageSize?: number;
+  page?: number;
+  limit?: number;
+  roleName?: string;
+  search?: string;
+};
 export type RoleIdParamInput = z.infer<typeof roleIdParamSchema>['params'];
 export type CreateRoleInput = {
   name?: string;

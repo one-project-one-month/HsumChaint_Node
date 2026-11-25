@@ -42,15 +42,8 @@ export const getPublicMonasteriesCatalog = async (
     return sendPaginatedResponse(
       res,
       result.items,
-      {
-        pageNumber: result.pageNumber,
-        pageSize: result.pageSize,
-        totalCount: result.totalCount,
-        totalPages: result.totalPages,
-        hasPreviousPage: result.hasPreviousPage,
-        hasNextPage: result.hasNextPage,
-      },
-      'Monasteries retrieved successfully.'
+      result.pagination,
+      'Monasteries catalog retrieved successfully.'
     );
   } catch (err) {
     next(err);
@@ -73,11 +66,7 @@ export const getPublicMonasteriesFeed = async (req: Request, res: Response, next
     return sendCursorPaginatedResponse(
       res,
       result.items,
-      {
-        nextCursor: result.nextCursor,
-        hasNextPage: result.hasNextPage,
-        pageSize: result.pageSize,
-      },
+      result.pagination,
       'Monasteries feed retrieved successfully.'
     );
   } catch (err) {
@@ -99,15 +88,8 @@ export const searchPublicMonasteries = async (req: Request, res: Response, next:
     return sendPaginatedResponse(
       res,
       result.items,
-      {
-        pageNumber: result.pageNumber,
-        pageSize: result.pageSize,
-        totalCount: result.totalCount,
-        totalPages: result.totalPages,
-        hasPreviousPage: result.hasPreviousPage,
-        hasNextPage: result.hasNextPage,
-      },
-      'Monasteries retrieved successfully.'
+      result.pagination,
+      'Monasteries search results retrieved successfully.'
     );
   } catch (err) {
     next(err);
@@ -135,11 +117,7 @@ export const searchPublicMonasteriesFeed = async (
     return sendCursorPaginatedResponse(
       res,
       result.items,
-      {
-        nextCursor: result.nextCursor,
-        hasNextPage: result.hasNextPage,
-        pageSize: result.pageSize,
-      },
+      result.pagination,
       'Monasteries feed retrieved successfully.'
     );
   } catch (err) {
@@ -152,8 +130,8 @@ export const searchPublicMonasteriesFeed = async (
  */
 export const createSpace = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const space = await createMonasteryService(req.user.userId, req.body);
-    return sendSuccessResponse(res, space, 'Monastery created successfully.', 201);
+    const result = await createMonasteryService(req.user.userId, req.body);
+    return sendSuccessResponse(res, result, 'Monastery created successfully.', 201);
   } catch (err) {
     next(err);
   }
@@ -177,14 +155,7 @@ export const getMyMonasteries = async (req: Request, res: Response, next: NextFu
     return sendPaginatedResponse(
       res,
       result.items,
-      {
-        pageNumber: result.pageNumber,
-        pageSize: result.pageSize,
-        totalCount: result.totalCount,
-        totalPages: result.totalPages,
-        hasPreviousPage: result.hasPreviousPage,
-        hasNextPage: result.hasNextPage,
-      },
+      result.pagination,
       'Monasteries retrieved successfully.'
     );
   } catch (err) {
@@ -212,11 +183,7 @@ export const getMyMonasteriesFeed = async (req: Request, res: Response, next: Ne
     return sendCursorPaginatedResponse(
       res,
       result.items,
-      {
-        nextCursor: result.nextCursor,
-        hasNextPage: result.hasNextPage,
-        pageSize: result.pageSize,
-      },
+      result.pagination,
       'Monasteries feed retrieved successfully.'
     );
   } catch (err) {
@@ -230,8 +197,8 @@ export const getMyMonasteriesFeed = async (req: Request, res: Response, next: Ne
 export const getSpaceById = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const spaceId = Number(req.params.id);
-    const space = await getMonasteryService(req.user.userId, spaceId, req.user.roleId);
-    return sendSuccessResponse(res, space, 'Monastery retrieved successfully.');
+    const result = await getMonasteryService(req.user.userId, spaceId, req.user.roleId);
+    return sendSuccessResponse(res, result, 'Monastery retrieved successfully.');
   } catch (err) {
     next(err);
   }
@@ -243,13 +210,13 @@ export const getSpaceById = async (req: Request, res: Response, next: NextFuncti
 export const updateSpace = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const spaceId = Number(req.params.id);
-    const updated = await updateMonasteryService(
+    const result = await updateMonasteryService(
       req.user.userId,
       spaceId,
       req.body,
       req.user.roleId
     );
-    return sendSuccessResponse(res, updated, 'Monastery updated successfully.');
+    return sendSuccessResponse(res, result, 'Monastery updated successfully.');
   } catch (err) {
     next(err);
   }
@@ -269,30 +236,30 @@ export const deleteSpace = async (req: Request, res: Response, next: NextFunctio
 };
 
 /**
- * Get current user space permissions (authenticated)
+ * 27a. Get Current User's Space Permissions (authenticated)
  */
 export const getSpacePermissions = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const spaceId = Number(req.params.id);
-    const permissions = await getCurrentUserSpacePermissionsService(
+    const result = await getCurrentUserSpacePermissionsService(
       req.user.userId,
       spaceId,
       req.user.roleId
     );
-    return sendSuccessResponse(res, permissions, 'User space permissions retrieved successfully.');
+    return sendSuccessResponse(res, result, 'Permissions retrieved successfully.');
   } catch (err) {
     next(err);
   }
 };
 
 /**
- * Space Roles catalog (e.g. Space Admin, Space Moderator, Space Editor, Space Member)
+ * 27b. Get Available Monastery Space Roles (authenticated)
  */
 export const getSpaceRoles = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const spaceId = req.params.id ? Number(req.params.id) : undefined;
-    const roles = await getSpaceRolesService(spaceId);
-    return sendSuccessResponse(res, { roles }, 'Space roles retrieved successfully.');
+    const result = await getSpaceRolesService(spaceId);
+    return sendSuccessResponse(res, result, 'Roles retrieved successfully.');
   } catch (err) {
     next(err);
   }
@@ -301,8 +268,8 @@ export const getSpaceRoles = async (req: Request, res: Response, next: NextFunct
 export const getSpaceRoleById = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const roleId = Number(req.params.id);
-    const role = await getSpaceRoleByIdService(roleId);
-    return sendSuccessResponse(res, role, 'Space role retrieved successfully.');
+    const result = await getSpaceRoleByIdService(roleId);
+    return sendSuccessResponse(res, result, 'Space role retrieved successfully.');
   } catch (err) {
     next(err);
   }
@@ -314,20 +281,15 @@ export const getSpaceRoleById = async (req: Request, res: Response, next: NextFu
 export const inviteMember = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const spaceId = Number(req.params.id);
-    const invitation = await inviteMemberService(
-      req.user.userId,
-      spaceId,
-      req.body,
-      req.user.roleId
-    );
-    return sendSuccessResponse(res, invitation, 'Invitation created successfully.', 201);
+    const result = await inviteMemberService(req.user.userId, spaceId, req.body, req.user.roleId);
+    return sendSuccessResponse(res, result, 'Invitation created successfully.', 201);
   } catch (err) {
     next(err);
   }
 };
 
 /**
- * Respond to invitation (authenticated)
+ * 24. Respond to Space Invitation (authenticated, Invitation.Respond)
  */
 export const respondToInvitation = async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -340,7 +302,7 @@ export const respondToInvitation = async (req: Request, res: Response, next: Nex
 };
 
 /**
- * Member Management: Get members (authenticated, Space.View)
+ * 25. List Space Members (authenticated, Space.ViewMembers)
  */
 export const getSpaceMembers = async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -358,14 +320,7 @@ export const getSpaceMembers = async (req: Request, res: Response, next: NextFun
     return sendPaginatedResponse(
       res,
       result.items,
-      {
-        pageNumber: result.pageNumber,
-        pageSize: result.pageSize,
-        totalCount: result.totalCount,
-        totalPages: result.totalPages,
-        hasPreviousPage: result.hasPreviousPage,
-        hasNextPage: result.hasNextPage,
-      },
+      result.pagination,
       'Members retrieved successfully.'
     );
   } catch (err) {
@@ -374,27 +329,27 @@ export const getSpaceMembers = async (req: Request, res: Response, next: NextFun
 };
 
 /**
- * Member Management: Update member role (authenticated, Space.Role.Manage)
+ * 26. Update Space Member Role (authenticated, Space.UpdateMemberRole)
  */
 export const updateMemberRole = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const spaceId = Number(req.params.id);
     const memberUserId = Number(req.params.memberUserId ?? req.params.userId);
-    const updated = await updateMemberRoleService(
+    const result = await updateMemberRoleService(
       req.user.userId,
       spaceId,
       memberUserId,
       req.body,
       req.user.roleId
     );
-    return sendSuccessResponse(res, updated, 'Member role updated successfully.');
+    return sendSuccessResponse(res, result, 'Member role updated successfully.');
   } catch (err) {
     next(err);
   }
 };
 
 /**
- * Member Management: Remove space member (authenticated, Space.Member.Remove)
+ * 27. Remove Member from Space (authenticated, Space.RemoveMember)
  */
 export const removeSpaceMember = async (req: Request, res: Response, next: NextFunction) => {
   try {

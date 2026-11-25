@@ -1,14 +1,14 @@
 import { Router } from 'express';
-import { authMiddleWare } from '@/middlewares/authMiddleWare';
+import { authMiddleware } from '@/middlewares/authMiddleWare';
 import { checkPermission } from '@/middlewares/permissionMiddleware';
 import { validator } from '@/middlewares/validator';
 import { getPermissions } from './permission.controller';
 import { getPermissionsQuerySchema } from './permission.schema';
 
-const permissionRouter = Router();
+const router = Router();
 
 // Require authentication for all permission routes
-permissionRouter.use(authMiddleWare);
+router.use(authMiddleware);
 
 /**
  * 49. List All System Permissions
@@ -16,11 +16,12 @@ permissionRouter.use(authMiddleWare);
  * Required Permission: Roles.View
  * Target: System Admin
  */
-permissionRouter.get(
+router.get(
   '/',
   checkPermission('Roles.View'),
   validator(getPermissionsQuerySchema),
   getPermissions
 );
 
-export default permissionRouter;
+export { router as permissionRouter };
+export default router;

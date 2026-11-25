@@ -218,6 +218,7 @@ export const registerUser = async (data: RegisterInput) => {
   const profileData = {
     ...result.user,
     monkProfile: result.user.roleId === 2 ? result.monkProfile : null,
+    permissions,
   };
   try {
     await redis.set(`user:${result.user.id}:profile`, JSON.stringify(profileData), 'EX', 3600);
@@ -299,6 +300,7 @@ export const loginUser = async (data: LoginInput) => {
     avatar: user.avatar,
     createdAt: user.createdAt,
     monkProfile: user.monkProfile,
+    permissions,
   };
   try {
     await redis.set(profileCacheKey, JSON.stringify(profileData), 'EX', 3600);
