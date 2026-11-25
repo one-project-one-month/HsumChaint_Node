@@ -15,7 +15,7 @@ import { notificationRouter } from './modules/notification/notification.routes';
 import { permissionRouter } from './modules/permission/permission.routes';
 import { roleRouter } from './modules/role/role.routes';
 import { spaceRouter } from './modules/space/space.routes';
-import spacePermissionRouter from './modules/space-permission/space-permission.routes';
+import { spacePermissionRouter } from './modules/space-permission/space-permission.routes';
 import spaceRoleRouter from './modules/space-role/space-role.routes';
 import { userRouter } from './modules/user/user.routes';
 import { errorResponse, successResponse } from './utils/response';

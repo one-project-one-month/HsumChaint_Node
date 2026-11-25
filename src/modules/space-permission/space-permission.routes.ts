@@ -1,13 +1,13 @@
 import { Router } from 'express';
-import { authMiddleWare } from '@/middlewares/authMiddleWare';
+import { authMiddleware } from '@/middlewares/authMiddleWare';
 import { validator } from '@/middlewares/validator';
 import { getSpacePermissions } from './space-permission.controller';
 import { getSpacePermissionsQuerySchema } from './space-permission.schema';
 
-const spacePermissionRouter = Router();
+const router = Router();
 
 // Require authentication for all space-permission routes
-spacePermissionRouter.use(authMiddleWare);
+router.use(authMiddleware);
 
 /**
  * 57. List All Space Permissions
@@ -15,6 +15,7 @@ spacePermissionRouter.use(authMiddleWare);
  * Required Permission: Authenticated
  * Target: All Authenticated Users
  */
-spacePermissionRouter.get('/', validator(getSpacePermissionsQuerySchema), getSpacePermissions);
+router.get('/', validator(getSpacePermissionsQuerySchema), getSpacePermissions);
 
-export default spacePermissionRouter;
+export { router as spacePermissionRouter };
+export default router;
