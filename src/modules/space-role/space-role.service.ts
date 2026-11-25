@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/prisma';
 import { clearSpaceRolePermissionsCache } from '@/middlewares/permissionMiddleware';
 import { AppError } from '@/utils/AppError';
+import type { PaginationMeta } from '@/utils/response';
 import { type FormattedPermission, formatPermission } from '../permission/permission.service';
 import { ensureSpacePermissionsInDb } from '../space-permission/space-permission.service';
 import type {
@@ -112,13 +113,15 @@ export const validateSpacePermissions = async (permissionIds: number[]): Promise
  * Generic listing/pagination operation for space roles (ordered ascending by default)
  */
 export const getSpaceRolesOnlyService = async (pageNumber = 1, pageSize = 10) => {
-  const skip = (pageNumber - 1) * pageSize;
+  const numPage = Number(pageNumber) || 1;
+  const numLimit = Number(pageSize) || 10;
+  const skip = (numPage - 1) * numLimit;
 
   const [roles, totalCount] = await Promise.all([
     prisma.spaceRole.findMany({
       where: { isDeleted: false },
       skip,
-      take: pageSize,
+      take: numLimit,
       orderBy: { id: 'asc' },
       include: {
         permissions: {
@@ -133,16 +136,26 @@ export const getSpaceRolesOnlyService = async (pageNumber = 1, pageSize = 10) =>
   ]);
 
   const items = roles.map((r) => mapSpaceRoleToDto(r, r.permissions));
+  const totalPages = Math.ceil(totalCount / numLimit) || 1;
+  const pagination: PaginationMeta = {
+    pageNumber: numPage,
+    pageSize: numLimit,
+    totalCount,
+    totalPages,
+    hasPreviousPage: numPage > 1,
+    hasNextPage: numPage < totalPages,
+  };
 
   return {
     items,
+    pagination,
     totalCount,
-    pageNumber,
-    pageSize,
-    totalPages: Math.ceil(totalCount / pageSize) || 1,
+    pageNumber: numPage,
+    pageSize: numLimit,
+    totalPages,
     total: totalCount,
-    page: pageNumber,
-    limit: pageSize,
+    page: numPage,
+    limit: numLimit,
   };
 };
 
@@ -150,7 +163,9 @@ export const getSpaceRolesOnlyService = async (pageNumber = 1, pageSize = 10) =>
  * Keyword search operation for space roles
  */
 export const searchSpaceRolesService = async (pageNumber = 1, pageSize = 10, keyword: string) => {
-  const skip = (pageNumber - 1) * pageSize;
+  const numPage = Number(pageNumber) || 1;
+  const numLimit = Number(pageSize) || 10;
+  const skip = (numPage - 1) * numLimit;
   const trimmed = keyword.trim();
 
   const whereClause = {
@@ -162,7 +177,7 @@ export const searchSpaceRolesService = async (pageNumber = 1, pageSize = 10, key
     prisma.spaceRole.findMany({
       where: whereClause,
       skip,
-      take: pageSize,
+      take: numLimit,
       orderBy: { id: 'asc' },
       include: {
         permissions: {
@@ -177,16 +192,26 @@ export const searchSpaceRolesService = async (pageNumber = 1, pageSize = 10, key
   ]);
 
   const items = roles.map((r) => mapSpaceRoleToDto(r, r.permissions));
+  const totalPages = Math.ceil(totalCount / numLimit) || 1;
+  const pagination: PaginationMeta = {
+    pageNumber: numPage,
+    pageSize: numLimit,
+    totalCount,
+    totalPages,
+    hasPreviousPage: numPage > 1,
+    hasNextPage: numPage < totalPages,
+  };
 
   return {
     items,
+    pagination,
     totalCount,
-    pageNumber,
-    pageSize,
-    totalPages: Math.ceil(totalCount / pageSize) || 1,
+    pageNumber: numPage,
+    pageSize: numLimit,
+    totalPages,
     total: totalCount,
-    page: pageNumber,
-    limit: pageSize,
+    page: numPage,
+    limit: numLimit,
   };
 };
 
@@ -194,8 +219,8 @@ export const searchSpaceRolesService = async (pageNumber = 1, pageSize = 10, key
  * 51. Get paginated list of space roles with their assigned permissions
  */
 export const getSpaceRolesService = async (query?: GetSpaceRolesQueryInput) => {
-  const pageNumber = query?.pageNumber ?? query?.page ?? 1;
-  const pageSize = query?.pageSize ?? query?.limit ?? 10;
+  const pageNumber = Number(query?.pageNumber ?? query?.page) || 1;
+  const pageSize = Number(query?.pageSize ?? query?.limit) || 10;
   const search = query?.roleName ?? query?.search;
 
   if (search && search.trim().length > 0) {

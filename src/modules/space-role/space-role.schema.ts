@@ -1,15 +1,31 @@
 import { z } from 'zod';
 
 // 51. Get Space Roles query schema
-export const getSpaceRolesQuerySchema = z.object({
-  query: z.object({
-    pageNumber: z.coerce.number().int().positive().default(1),
-    pageSize: z.coerce.number().int().positive().max(100).default(10),
-    page: z.coerce.number().int().positive().optional(),
-    limit: z.coerce.number().int().positive().max(100).optional(),
+export const getSpaceRolesQueryInputSchema = z
+  .object({
+    pageNumber: z.coerce.number().int().min(1).optional(),
+    page: z.coerce.number().int().min(1).optional(),
+    pageSize: z.coerce.number().int().min(1).max(100).optional(),
+    limit: z.coerce.number().int().min(1).max(100).optional(),
     roleName: z.string().trim().optional(),
     search: z.string().trim().optional(),
-  }),
+  })
+  .transform((data) => {
+    const pageNumber = data.pageNumber ?? data.page ?? 1;
+    const pageSize = data.pageSize ?? data.limit ?? 10;
+    const roleName = data.roleName ?? data.search;
+    return {
+      ...data,
+      pageNumber,
+      pageSize,
+      page: pageNumber,
+      limit: pageSize,
+      roleName,
+    };
+  });
+
+export const getSpaceRolesQuerySchema = z.object({
+  query: getSpaceRolesQueryInputSchema,
 });
 
 // 52. Space Role by ID param schema
@@ -69,7 +85,14 @@ export const assignSpacePermissionsSchema = z.object({
 // ==========================================
 // Types
 // ==========================================
-export type GetSpaceRolesQueryInput = z.infer<typeof getSpaceRolesQuerySchema>['query'];
+export type GetSpaceRolesQueryInput = {
+  pageNumber?: number;
+  pageSize?: number;
+  page?: number;
+  limit?: number;
+  roleName?: string;
+  search?: string;
+};
 export type SpaceRoleIdParamInput = z.infer<typeof spaceRoleIdParamSchema>['params'];
 export type CreateSpaceRoleInput = z.infer<typeof createSpaceRoleSchema>['body'];
 export type UpdateSpaceRoleInput = z.infer<typeof updateSpaceRoleSchema>['body'];

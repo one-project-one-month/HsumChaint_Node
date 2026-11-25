@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { authMiddleWare } from '@/middlewares/authMiddleWare';
+import { authMiddleware } from '@/middlewares/authMiddleWare';
 import { checkPermission } from '@/middlewares/permissionMiddleware';
 import { validator } from '@/middlewares/validator';
 import {
@@ -19,10 +19,10 @@ import {
   updateSpaceRoleSchema,
 } from './space-role.schema';
 
-const spaceRoleRouter = Router();
+const router = Router();
 
 // Require authentication for all space-roles routes
-spaceRoleRouter.use(authMiddleWare);
+router.use(authMiddleware);
 
 /**
  * 51. Get Space Roles
@@ -30,7 +30,7 @@ spaceRoleRouter.use(authMiddleWare);
  * Target: Space Managers, System Admin
  * Permission: Authenticated
  */
-spaceRoleRouter.get('/', validator(getSpaceRolesQuerySchema), getSpaceRoles);
+router.get('/', validator(getSpaceRolesQuerySchema), getSpaceRoles);
 
 /**
  * 56. Assign Permissions to Space Role
@@ -38,7 +38,7 @@ spaceRoleRouter.get('/', validator(getSpaceRolesQuerySchema), getSpaceRoles);
  * Target: System Admin
  * Permission: Roles.Assign
  */
-spaceRoleRouter.post(
+router.post(
   '/assign-permissions',
   checkPermission('Roles.Assign'),
   validator(assignSpacePermissionsSchema),
@@ -51,7 +51,7 @@ spaceRoleRouter.post(
  * Target: System Admin
  * Permission: Roles.Manage
  */
-spaceRoleRouter.post(
+router.post(
   '/',
   checkPermission('Roles.Manage'),
   validator(createSpaceRoleSchema),
@@ -64,7 +64,7 @@ spaceRoleRouter.post(
  * Target: Space Managers, System Admin
  * Permission: Authenticated
  */
-spaceRoleRouter.get('/:id', validator(spaceRoleIdParamSchema), getSpaceRoleById);
+router.get('/:id', validator(spaceRoleIdParamSchema), getSpaceRoleById);
 
 /**
  * 54. Update Space Role
@@ -72,7 +72,7 @@ spaceRoleRouter.get('/:id', validator(spaceRoleIdParamSchema), getSpaceRoleById)
  * Target: System Admin
  * Permission: Roles.Manage
  */
-spaceRoleRouter.put(
+router.put(
   '/:id',
   checkPermission('Roles.Manage'),
   validator(updateSpaceRoleSchema),
@@ -85,11 +85,12 @@ spaceRoleRouter.put(
  * Target: System Admin
  * Permission: Roles.Manage
  */
-spaceRoleRouter.delete(
+router.delete(
   '/:id',
   checkPermission('Roles.Manage'),
   validator(deleteSpaceRoleSchema),
   deleteSpaceRole
 );
 
-export default spaceRoleRouter;
+export { router as spaceRoleRouter };
+export default router;
