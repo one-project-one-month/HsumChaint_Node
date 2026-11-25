@@ -127,26 +127,28 @@ export const getPermissionsOnlyService = async (pageNumber = 1, pageSize = 20) =
     orderBy: { id: 'asc' },
   });
 
-  const totalPages = Math.ceil(totalCount / pageSize) || 1;
+  const numPage = Number(pageNumber) || 1;
+  const numLimit = Number(pageSize) || 20;
+  const totalPages = Math.ceil(totalCount / numLimit) || 1;
   const pagination: PaginationMeta = {
-    pageNumber,
-    pageSize,
+    pageNumber: numPage,
+    pageSize: numLimit,
     totalCount,
     totalPages,
-    hasPreviousPage: pageNumber > 1,
-    hasNextPage: pageNumber < totalPages,
+    hasPreviousPage: numPage > 1,
+    hasNextPage: numPage < totalPages,
   };
 
   return {
     items: permissions.map(formatPermission),
     pagination,
     totalCount,
-    pageNumber,
-    pageSize,
+    pageNumber: numPage,
+    pageSize: numLimit,
     totalPages,
     total: totalCount,
-    page: pageNumber,
-    limit: pageSize,
+    page: numPage,
+    limit: numLimit,
   };
 };
 
@@ -159,7 +161,9 @@ export const searchPermissionsService = async (
   search?: string,
   module?: string
 ) => {
-  const skip = (pageNumber - 1) * pageSize;
+  const numPage = Number(pageNumber) || 1;
+  const numLimit = Number(pageSize) || 20;
+  const skip = (numPage - 1) * numLimit;
 
   const whereClause: {
     isDeleted: boolean;
@@ -178,32 +182,32 @@ export const searchPermissionsService = async (
     prisma.permission.findMany({
       where: whereClause,
       skip,
-      take: pageSize,
+      take: numLimit,
       orderBy: { id: 'asc' },
     }),
     prisma.permission.count({ where: whereClause }),
   ]);
 
-  const totalPages = Math.ceil(totalCount / pageSize) || 1;
+  const totalPages = Math.ceil(totalCount / numLimit) || 1;
   const pagination: PaginationMeta = {
-    pageNumber,
-    pageSize,
+    pageNumber: numPage,
+    pageSize: numLimit,
     totalCount,
     totalPages,
-    hasPreviousPage: pageNumber > 1,
-    hasNextPage: pageNumber < totalPages,
+    hasPreviousPage: numPage > 1,
+    hasNextPage: numPage < totalPages,
   };
 
   return {
     items: permissions.map(formatPermission),
     pagination,
     totalCount,
-    pageNumber,
-    pageSize,
+    pageNumber: numPage,
+    pageSize: numLimit,
     totalPages,
     total: totalCount,
-    page: pageNumber,
-    limit: pageSize,
+    page: numPage,
+    limit: numLimit,
   };
 };
 
@@ -213,8 +217,8 @@ export const searchPermissionsService = async (
 export const getPermissionsService = async (
   query: GetPermissionsQueryInput = { pageNumber: 1, pageSize: 20 }
 ) => {
-  const pageNumber = query?.pageNumber ?? query?.page ?? 1;
-  const pageSize = query?.pageSize ?? query?.limit ?? 20;
+  const pageNumber = Number(query?.pageNumber ?? query?.page) || 1;
+  const pageSize = Number(query?.pageSize ?? query?.limit) || 20;
 
   if (query?.search || query?.module) {
     return searchPermissionsService(pageNumber, pageSize, query.search, query.module);

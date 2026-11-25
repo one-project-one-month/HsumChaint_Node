@@ -13,7 +13,7 @@ import { donationRouter } from './modules/donation/donation.routes';
 import healthRoutes from './modules/health/health.routes';
 import { notificationRouter } from './modules/notification/notification.routes';
 import { permissionRouter } from './modules/permission/permission.routes';
-import roleRouter from './modules/role/role.routes';
+import { roleRouter } from './modules/role/role.routes';
 import { spaceRouter } from './modules/space/space.routes';
 import spacePermissionRouter from './modules/space-permission/space-permission.routes';
 import spaceRoleRouter from './modules/space-role/space-role.routes';

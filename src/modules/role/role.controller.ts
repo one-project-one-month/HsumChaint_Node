@@ -27,30 +27,13 @@ export { getPermissions } from '../permission/permission.controller';
  */
 export const getRoles = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const rawQuery = req.query as Record<string, string>;
-    const pageNumber = Number(rawQuery.pageNumber || rawQuery.page) || 1;
-    const pageSize = Number(rawQuery.pageSize || rawQuery.limit) || 10;
-    const roleName = rawQuery.roleName || rawQuery.search;
-
-    const queryData: GetRolesQueryInput = {
-      pageNumber,
-      pageSize,
-      roleName,
-    };
-
-    const result = await getRolesService(queryData);
+    const query = req.query as unknown as GetRolesQueryInput;
+    const result = await getRolesService(query);
 
     return sendPaginatedResponse(
       res,
       result.items,
-      {
-        pageNumber: result.pageNumber,
-        pageSize: result.pageSize,
-        totalCount: result.totalCount,
-        totalPages: result.totalPages,
-        hasPreviousPage: result.pageNumber > 1,
-        hasNextPage: result.pageNumber < result.totalPages,
-      },
+      result.pagination,
       'System roles retrieved successfully.'
     );
   } catch (err) {
