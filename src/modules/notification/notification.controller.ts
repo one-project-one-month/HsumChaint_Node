@@ -24,6 +24,7 @@ export const createNotification = async (req: Request, res: Response, next: Next
       type: body.type,
       message: body.message,
       title: body.title,
+      fcmToken: body.fcmToken,
     });
 
     return sendSuccessResponse(res, result, 'Notification created successfully.', 201);
@@ -34,27 +35,14 @@ export const createNotification = async (req: Request, res: Response, next: Next
 
 export const getUserNotifications = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const userId = req.user.userId;
     const query = req.query as unknown as GetNotificationsQueryInput;
-
-    const result = await getUserNotificationsService(userId, query);
-
-    const totalPages = Math.ceil(result.totals / result.pageSize) || 1;
-    const pagination = {
-      pageNumber: result.pageNumber,
-      pageSize: result.pageSize,
-      totalCount: result.totals,
-      totalPages,
-      hasPreviousPage: result.pageNumber > 1,
-      hasNextPage: result.pageNumber < totalPages,
-    };
-
-    const data = {
-      unreadCount: result.unreadCount,
-      items: result.notifications,
-    };
-
-    return sendPaginatedResponse(res, data, pagination, 'Notifications retrieved successfully.');
+    const result = await getUserNotificationsService(req.user.userId, query);
+    return sendPaginatedResponse(
+      res,
+      result.items,
+      result.pagination,
+      'Notifications retrieved successfully.'
+    );
   } catch (err) {
     next(err);
   }
@@ -76,8 +64,8 @@ export const markNotificationAsRead = async (req: Request, res: Response, next: 
 export const deleteNotification = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const body = req.body as DeleteNotificationInput;
-    const notificationId = Number(body?.notificationId ?? req.params?.id);
-    const targetUserId = body?.userId ?? req.user.userId;
+    const notificationId = Number(body.notificationId);
+    const targetUserId = body.userId ?? req.user.userId;
 
     const result = await deleteNotificationService(notificationId, targetUserId);
 

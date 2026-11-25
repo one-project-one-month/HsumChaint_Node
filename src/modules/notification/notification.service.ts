@@ -3,13 +3,19 @@ import { sendPush } from '@/lib/firebase';
 import { prisma } from '@/lib/prisma';
 import { AppError } from '@/utils/AppError';
 import { logger } from '@/utils/logger';
-import { type GetNotificationsQueryInput, NOTIFICATION_TYPE } from './notification.schema';
+import {
+  type GetNotificationsQueryInput,
+  NOTIFICATION_TYPE,
+  resolveNotificationType,
+} from './notification.schema';
 
 export const createNotificationService = async (data: {
   userId: number;
   type?: number;
+  notificationType?: string | number;
   message: string;
   title?: string;
+  fcmToken?: string;
 }) => {
   const user = await prisma.user.findFirst({
     where: { id: data.userId, isDeleted: false },
@@ -20,7 +26,11 @@ export const createNotificationService = async (data: {
     throw new AppError('User not found', 404);
   }
 
-  const notificationType = data.type ?? NOTIFICATION_TYPE.DonationReminder;
+  const notificationType =
+    data.type ??
+    (data.notificationType !== undefined
+      ? resolveNotificationType(data.notificationType)
+      : NOTIFICATION_TYPE.DonationReminder);
 
   const notification = await prisma.notification.create({
     data: {
@@ -32,10 +42,12 @@ export const createNotificationService = async (data: {
     },
   });
 
-  if (user.fcmToken) {
+  const targetToken = data.fcmToken?.trim() || user.fcmToken;
+
+  if (targetToken) {
     try {
       await sendPush(
-        user.fcmToken,
+        targetToken,
         data.message,
         {
           type: String(notificationType),
@@ -58,9 +70,9 @@ export const getUserNotificationsService = async (
   userId: number,
   query: GetNotificationsQueryInput
 ) => {
-  const page = Number(query.page) || 1;
-  const limit = Number(query.limit) || 10;
-  const skip = (page - 1) * limit;
+  const pageNumber = Number(query.pageNumber ?? query.page) || 1;
+  const pageSize = Number(query.pageSize ?? query.limit) || 10;
+  const skip = (pageNumber - 1) * pageSize;
 
   const where: Prisma.NotificationWhereInput = {
     userId,
@@ -79,7 +91,7 @@ export const getUserNotificationsService = async (
     prisma.notification.findMany({
       where,
       skip,
-      take: limit,
+      take: pageSize,
       orderBy: { createdAt: 'desc' },
     }),
     prisma.notification.count({ where }),
@@ -92,12 +104,27 @@ export const getUserNotificationsService = async (
     }),
   ]);
 
+  const totalPages = Math.ceil(totals / pageSize) || 1;
+  const pagination = {
+    pageNumber,
+    pageSize,
+    totalCount: totals,
+    totalPages,
+    hasPreviousPage: pageNumber > 1,
+    hasNextPage: pageNumber < totalPages,
+  };
+
   return {
+    items: {
+      unreadCount,
+      items: notifications,
+    },
     notifications,
     unreadCount,
     totals,
-    pageNumber: page,
-    pageSize: limit,
+    pageNumber,
+    pageSize,
+    pagination,
   };
 };
 

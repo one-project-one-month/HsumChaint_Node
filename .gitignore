@@ -1,3 +1,9 @@
+# Firebase service account credentials
+firebase-service-account.json
+*adminsdk*.json
+*service-account*.json
+serviceAccountKey.json
+
 # dependencies (bun install)
 node_modules
 
