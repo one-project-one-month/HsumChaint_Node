@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma';
+import type { PaginationMeta } from '@/utils/response';
 import type { GetPermissionsQueryInput } from './permission.schema';
 
 export interface FormattedPermission {
@@ -126,12 +127,23 @@ export const getPermissionsOnlyService = async (pageNumber = 1, pageSize = 20) =
     orderBy: { id: 'asc' },
   });
 
+  const totalPages = Math.ceil(totalCount / pageSize) || 1;
+  const pagination: PaginationMeta = {
+    pageNumber,
+    pageSize,
+    totalCount,
+    totalPages,
+    hasPreviousPage: pageNumber > 1,
+    hasNextPage: pageNumber < totalPages,
+  };
+
   return {
     items: permissions.map(formatPermission),
+    pagination,
     totalCount,
     pageNumber,
     pageSize,
-    totalPages: Math.ceil(totalCount / pageSize) || 1,
+    totalPages,
     total: totalCount,
     page: pageNumber,
     limit: pageSize,
@@ -172,12 +184,23 @@ export const searchPermissionsService = async (
     prisma.permission.count({ where: whereClause }),
   ]);
 
+  const totalPages = Math.ceil(totalCount / pageSize) || 1;
+  const pagination: PaginationMeta = {
+    pageNumber,
+    pageSize,
+    totalCount,
+    totalPages,
+    hasPreviousPage: pageNumber > 1,
+    hasNextPage: pageNumber < totalPages,
+  };
+
   return {
     items: permissions.map(formatPermission),
+    pagination,
     totalCount,
     pageNumber,
     pageSize,
-    totalPages: Math.ceil(totalCount / pageSize) || 1,
+    totalPages,
     total: totalCount,
     page: pageNumber,
     limit: pageSize,
@@ -190,10 +213,10 @@ export const searchPermissionsService = async (
 export const getPermissionsService = async (
   query: GetPermissionsQueryInput = { pageNumber: 1, pageSize: 20 }
 ) => {
-  const pageNumber = query.pageNumber ?? query.page ?? 1;
-  const pageSize = query.pageSize ?? query.limit ?? 20;
+  const pageNumber = query?.pageNumber ?? query?.page ?? 1;
+  const pageSize = query?.pageSize ?? query?.limit ?? 20;
 
-  if (query.search || query.module) {
+  if (query?.search || query?.module) {
     return searchPermissionsService(pageNumber, pageSize, query.search, query.module);
   }
 
